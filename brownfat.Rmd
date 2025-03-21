@@ -1,0 +1,23 @@
+---
+title: "brownfat"
+output: html_document
+---
+
+Read the file:
+
+```{r}
+library(readxl)
+
+# the excel sheet represents NA values by "NA"
+brownfat <- read_excel("./description/BrownFat.xls", na = "NA")
+nrow(brownfat)
+```
+
+Check if there's any NA values:
+
+```{r}
+x <- colSums(is.na(brownfat)) # 
+x[x > 0]
+```
+
+3 variables has NA values detected: Cancer_Status, Cancer_Type, and TSH. Data cleaning needed.
