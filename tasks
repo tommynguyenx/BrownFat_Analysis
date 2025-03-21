@@ -1,0 +1,12 @@
+1. Data Cleaning (if any)
+2. EDA (Explanatory Data Analysis):
+  - Descriptive statistics for each variable (include graphs)
+  - Distribution of the response variable
+  - Relation between explanatory variables and the response variables (and other covariates)
+3. Model Selection & Validation:
+  - Which covariates included? Which are not?
+  - Interactions?
+  - Other non-linear function considerations, e.g. polynomials?
+4. Model Diagnostics:
+  - Violations of regression assumptions?
+  - Influential data points and/or outliers?
