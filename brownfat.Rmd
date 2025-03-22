@@ -21,3 +21,7 @@ x[x > 0]
 ```
 
 3 variables has NA values detected: Cancer_Status, Cancer_Type, and TSH. Data cleaning needed.
+
+Notice that $4425$ out of $n=4842$ observations had no data on their `TSH`, as this ratio is too large in order for us to confidently assign the most-probable values, we will choose to exclude the variable `TSH` altogether.
+
+There are observations where both the `Cancer_Status` and `Cancer_Type` is set to NA, we will exclude these observations.
