@@ -3,11 +3,14 @@ title: "brownfat"
 output: html_document
 ---
 
+```{r}
+library(readxl)
+library(dplyr)
+```
+
 Read the file:
 
 ```{r}
-library(readxl)
-
 # the excel sheet represents NA values by "NA"
 brownfat <- read_excel("./description/BrownFat.xls", na = "NA")
 nrow(brownfat)
@@ -24,4 +27,57 @@ x[x > 0]
 
 Notice that $4425$ out of $n=4842$ observations had no data on their `TSH`, as this ratio is too large in order for us to confidently assign the most-probable values, we will choose to exclude the variable `TSH` altogether.
 
-There are observations where both the `Cancer_Status` and `Cancer_Type` is set to NA, we will exclude these observations.
+```{r}
+brownfat_cleaned_data <- brownfat %>% select(-c("TSH"))
+```
+
+There are observations where both the `Cancer_Status` and `Cancer_Type` is set to NA, as we don't have domain knowledge to assign appropriate values nor is it the main focus of this research, we will simply exclude these observations.
+
+```{r}
+# determine how many obs. display such behaviour
+x <- sum(is.na(brownfat$Cancer_Status) & is.na(brownfat$Cancer_Type))
+paste("No. of observations w/ Cancer_Status == Cancer_Type == NA is:", x)
+
+# exclude these obs.
+brownfat_cleaned_data <- brownfat_cleaned_data %>% 
+  filter(!(is.na(Cancer_Status) & is.na(Cancer_Type)))
+```
+
+Observe that since the remaining $369  - 250 = 119$ observations still having `Cancer_Type == NA` also have that `Cancer_Status == 0`, meaning they do have cancer (thus setting `Cancer_Type` to $0$ is not a valid option) and hence we can either assign values to these missing values or once again, simply remove them.
+
+-   Option 1: We calculate the estimate probability of each category (other than $0$) based on their frequency in the given data, and then assign `NA` values using our new probability measure.
+
+```{r}
+set.seed("14")
+
+# calculate the estimated prob. of each category (except 0, and NAs)
+cancer_status_category_prob <- brownfat_cleaned_data %>%
+  filter(!is.na(Cancer_Type) & Cancer_Type != 0) %>%
+  count(Cancer_Type) %>% 
+  mutate(probability = n / sum(n))
+
+# function to re-assign those w/ NA values
+assign_cancer_type <- function(x) {
+  if (is.na(x)) {
+    sample(cancer_status_category_prob$Cancer_Type, 1, 
+           prob = cancer_status_category_prob$probability)
+  } else {
+    x
+  }
+}
+
+
+# re-assign those w/ Cancer_Type == NA
+brownfat_cleaned_data_v1 <- brownfat_cleaned_data
+brownfat_cleaned_data_v1$Cancer_Type <- sapply(brownfat_cleaned_data$Cancer_Type,
+                                   assign_cancer_type)
+```
+
+Why may this method be problematic? =\> We've only taking into the account the frequencies of each of these types of cancer when in reality, a multitude of other factors affect the diagnosis of single patient. (We may consider to improve this later on by also creating a prediction model)
+
+-   Option 2: To avoid potential hazardous assumptions, we may opt to exclude these `NA` values altogether:
+
+```{r}
+brownfat_cleaned_data_v2 <- brownfat_cleaned_data %>%
+  filter(!is.na(Cancer_Type))
+```
