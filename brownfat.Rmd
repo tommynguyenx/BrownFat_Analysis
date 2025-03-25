@@ -81,3 +81,5 @@ Why may this method be problematic? =\> We've only taking into the account the f
 brownfat_cleaned_data_v2 <- brownfat_cleaned_data %>%
   filter(!is.na(Cancer_Type))
 ```
+
+sds
