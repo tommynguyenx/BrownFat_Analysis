@@ -6,6 +6,9 @@ output: html_document
 ```{r}
 library(readxl)
 library(dplyr)
+library(ggplot2)
+library(pheatmap)
+library(car)
 ```
 
 Read the file:
@@ -28,7 +31,7 @@ x[x > 0]
 Notice that $4425$ out of $n=4842$ observations had no data on their `TSH`, as this ratio is too large in order for us to confidently assign the most-probable values, we will choose to exclude the variable `TSH` altogether.
 
 ```{r}
-brownfat_cleaned_data <- brownfat %>% select(-c("TSH"))
+brownfat_cleaned_data <- brownfat %>% select(-c("TSH", "Id"))
 ```
 
 There are observations where both the `Cancer_Status` and `Cancer_Type` is set to NA, as we don't have domain knowledge to assign appropriate values nor is it the main focus of this research, we will simply exclude these observations.
@@ -82,4 +85,79 @@ brownfat_cleaned_data_v2 <- brownfat_cleaned_data %>%
   filter(!is.na(Cancer_Type))
 ```
 
-sds
+Lets check for the distribution of the age:
+```{r}
+ggplot(data = brownfat_cleaned_data_v2, aes(x = Age))+
+  geom_histogram()
+ggplot(data = brownfat_cleaned_data_v2, aes(x = Ext_Temp))+
+  geom_histogram()
+ggplot(data = brownfat_cleaned_data_v2, aes(x = `2D_Temp`))+
+  geom_histogram()
+ggplot(data = brownfat_cleaned_data_v2, aes(x = `3D_Temp`))+
+  geom_histogram()
+ggplot(data = brownfat_cleaned_data_v2, aes(x = `7D_Temp`))+
+  geom_histogram()
+ggplot(data = brownfat_cleaned_data_v2, aes(x = `1M_Temp`))+
+  geom_histogram()
+ggplot(data = brownfat_cleaned_data_v2, aes(x = Duration_Sunshine))+
+  geom_histogram()
+ggplot(data = brownfat_cleaned_data_v2, aes(x = Weigth))+
+  geom_histogram()
+ggplot(data = brownfat_cleaned_data_v2, aes(x = Size))+
+  geom_histogram()
+ggplot(data = brownfat_cleaned_data_v2, aes(x = BMI))+
+  geom_histogram()
+ggplot(data = brownfat_cleaned_data_v2, aes(x = Glycemy))+
+  geom_histogram()
+ggplot(data = brownfat_cleaned_data_v2, aes(x = LBW))+
+  geom_histogram()
+ggplot(data = brownfat_cleaned_data_v2, aes(x = Total_vol))+
+  geom_histogram()
+```
+
+```{r}
+mean_age <- mean(brownfat_cleaned_data_v2$Age)
+mean_age
+```
+- The explanatory variable Age seems to follow approximately close to a normal distribution with a mean of 61.82. The sample looks skewed toward the elderly side of the adults.
+```{r}
+mean_ext_temp <- mean(brownfat_cleaned_data_v2$Ext_Temp)
+mean_ext_temp
+```
+- The explanatory variable Ext_Temp seems to follow approximately but far from a normal distribution, with a mean of 6.
+
+The correlation matrix of the model is given by: 
+```{r}
+brownfat_cleaned_data_v2$Month <- as.numeric(factor(brownfat_cleaned_data_v2$Month))
+cor_matrix <- cor(brownfat_cleaned_data_v2)
+pheatmap(cor_matrix, display_numbers = TRUE, cluster_rows = FALSE, cluster_cols = FALSE)
+
+```
+We notice that:
+- All the temperature covariates are strongly, positively correlated to each other. 
+- Weight is highly correlated with BMI and LBW.
+- Sex, Size and LBW are strongly, positively  correlated to each other.
+- The season is negatively, moderately correlated to the temperature and sunshine duration covariates.
+- The sunshine is positively, strongly correlated to the temperature covariates.
+- Cancer status and cancer type are positively, moderately correlated to each other.
+
+Lets try centering the model:
+
+```{r}
+brownfat_cleaned_data_v2$Ext_Temp <- brownfat_cleaned_data_v2$Ext_Temp - mean(brownfat_cleaned_data_v2$Ext_Temp)
+
+brownfat_cleaned_data_v2$`2D_Temp` <- brownfat_cleaned_data_v2$`2D_Temp` - mean(brownfat_cleaned_data_v2$`2D_Temp`) 
+
+brownfat_cleaned_data_v2$`3D_Temp` <- brownfat_cleaned_data_v2$`3D_Temp` - mean(brownfat_cleaned_data_v2$`3D_Temp`) 
+
+brownfat_cleaned_data_v2$`7D_Temp` <- brownfat_cleaned_data_v2$`7D_Temp` - mean(brownfat_cleaned_data_v2$`7D_Temp`)
+
+brownfat_cleaned_data_v2$`1M_Temp` <- brownfat_cleaned_data_v2$`1M_Temp` - mean(brownfat_cleaned_data_v2$`1M_Temp`) 
+
+brownfat_cleaned_data_v2$Season <- brownfat_cleaned_data_v2$Season - mean(brownfat_cleaned_data_v2$Season) 
+brownfat_cleaned_data_v2$Duration_Sunshine<- brownfat_cleaned_data_v2$Duration_Sunshine - mean(brownfat_cleaned_data_v2$Duration_Sunshine) 
+
+cor_matrix <- cor(brownfat_cleaned_data_v2)
+pheatmap(cor_matrix, display_numbers = TRUE, cluster_rows = FALSE, cluster_cols = FALSE)
+
+```
