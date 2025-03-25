@@ -6,6 +6,8 @@ output: html_document
 ```{r}
 library(readxl)
 library(dplyr)
+library(MASS)
+library(MPV)
 ```
 
 Read the file:
@@ -19,7 +21,7 @@ nrow(brownfat)
 Check if there's any NA values:
 
 ```{r}
-x <- colSums(is.na(brownfat)) # 
+x <- colSums(is.na(brownfat)) 
 x[x > 0]
 ```
 
@@ -28,7 +30,7 @@ x[x > 0]
 Notice that $4425$ out of $n=4842$ observations had no data on their `TSH`, as this ratio is too large in order for us to confidently assign the most-probable values, we will choose to exclude the variable `TSH` altogether.
 
 ```{r}
-brownfat_cleaned_data <- brownfat %>% select(-c("TSH"))
+brownfat_cleaned_data <- brownfat %>% dplyr::select(-c("TSH"))
 ```
 
 There are observations where both the `Cancer_Status` and `Cancer_Type` is set to NA, as we don't have domain knowledge to assign appropriate values nor is it the main focus of this research, we will simply exclude these observations.
@@ -82,4 +84,54 @@ brownfat_cleaned_data_v2 <- brownfat_cleaned_data %>%
   filter(!is.na(Cancer_Type))
 ```
 
-sds
+## MODEL SELECTION
+
+We will partition the cleaned data (version 1) into 2 equal parts: training and testing dataset.
+
+```{r}
+set.seed("15")
+training_data <- brownfat_cleaned_data_v1 %>%
+  slice_sample(prop = 0.5)
+testing_data <- anti_join(brownfat_cleaned_data_v1, training_data)
+```
+
+We shall perform Step-wise Regression on our training data.
+
+```{r}
+fit_full <- lm(Total_vol ~ . -Id , data=training_data) # full model
+fit_intercept <- lm(Total_vol ~ 1, data=training_data) # intercept model
+
+step <- stepAIC(fit_intercept, scope=list(upper=fit_full, lower=fit_intercept),
+        direction="both")
+```
+
+The selected model via Step-wise Regression is given as follows:
+
+```{r}
+summary(step)
+```
+
+To make sure our assignment of NA values for `Cancer_Type` wasn't problematic, we will also perform the same test on version 2 of the cleaned data.
+
+```{r}
+set.seed("15")
+training_data_v2 <- brownfat_cleaned_data_v2 %>%
+  slice_sample(prop = 0.5)
+testing_data_v2 <- anti_join(brownfat_cleaned_data_v2, training_data_v2)
+```
+
+```{r}
+fit_full_v2 <- lm(Total_vol ~ . -Id , data=training_data_v2) # full model
+fit_intercept_v2 <- lm(Total_vol ~ 1, data=training_data_v2) # intercept model
+
+step_v2 <- stepAIC(fit_intercept_v2, 
+                scope=list(upper=fit_full_v2, lower=fit_intercept_v2),
+                direction="both")
+```
+
+```{r}
+summary(step_v2)
+AIC(step_v2)
+```
+
+NOTE: The model trained on v1 of the cleaned data reported a better $R^2$, $R^2_{adj}$, but smaller $AIC$ than the model trained on v2 of the cleaned data.
