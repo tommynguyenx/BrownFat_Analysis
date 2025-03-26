@@ -101,7 +101,7 @@ brownfat_cleaned_data_v2$BrownFat <- ifelse(brownfat_cleaned_data_v2$Total_vol >
 We will partition the cleaned data (version 2) into 2 equal parts: training and testing dataset. (70/30)
 
 ```{r}
-set.seed("15")
+set.seed(14)
 training_data <- brownfat_cleaned_data_v2 %>%
   slice_sample(prop = 0.7)
 testing_data <- anti_join(brownfat_cleaned_data_v2, training_data)
@@ -127,11 +127,34 @@ summary(step)
 step$anova
 ```
 
-Recall `1M_Temp` and `Ext_Temp` are highly correlated as well as the p-value testing for regression coefficient associated w/ `1M_Temp` is larger than $\alpha = 0.05$, we will drop the covariate `1M_Temp`. Thus our final model after step-wise regression is as follows:
+So:
 
 ```{r}
-fit_final <- lm(BrownFat ~ Age + Ext_Temp + Diabetes + Sex + 
-                  Weigth + Season + Duration_Sunshine,
+fit_final <- lm(BrownFat ~ Age + Ext_Temp + Diabetes + Sex + Weigth + Season, 
                 data=training_data)
 summary(fit_final)
+```
+Now we fit a model to predict the actual volume of brown fat (when it is not 0):
+```{r}
+fit_full_w_bf <- lm(Total_vol ~ . -Id -BrownFat , data=training_data_w_bf) # full model
+fit_intercept_w_bf <- lm(Total_vol ~ 1, data=training_data_w_bf) # intercept model
+
+step_w_bf <- stepAIC(fit_intercept_w_bf, 
+                scope=list(upper=fit_full_w_bf, lower=fit_intercept_w_bf),
+                direction="both", trace=0)
+```
+
+Now we observe the results:
+```{r}
+summary(step_w_bf)
+step_w_bf$anova
+```
+
+Thus, the final model is:
+```{r}
+fit_final_w_bf <- lm(Total_vol ~ `7D_Temp` + `3D_Temp` + Cancer_Status 
+                     + Ext_Temp + Glycemy + Sex + Age,
+                     data=training_data_w_bf)
+summary(fit_final_w_bf)
+extractAIC(fit_final_w_bf)
 ```
