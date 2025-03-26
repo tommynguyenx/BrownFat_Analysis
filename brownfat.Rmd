@@ -96,6 +96,10 @@ First, we shall build the model to determine which of the 2 groups does the data
 # make Y categorical
 brownfat_cleaned_data_v2$BrownFat <- ifelse(brownfat_cleaned_data_v2$Total_vol > 0,
                                             1, 0)
+# convert to factors
+brownfat_cleaned_data_v2$Month <- as.factor(brownfat_cleaned_data_v2$Month)
+brownfat_cleaned_data_v2$Cancer_Status <- as.factor(brownfat_cleaned_data_v2$Cancer_Status)
+brownfat_cleaned_data_v2$Cancer_Type <- as.factor(brownfat_cleaned_data_v2$Cancer_Type)
 ```
 
 We will partition the cleaned data (version 2) into 2 equal parts: training and testing dataset. (70/30)
@@ -158,3 +162,88 @@ fit_final_w_bf <- lm(Total_vol ~ `7D_Temp` + `3D_Temp` + Cancer_Status
 summary(fit_final_w_bf)
 extractAIC(fit_final_w_bf)
 ```
+
+Notice that the p-value for the intercept is quite high, consider the following model w/o intercept:
+```{r}
+fit_final_w_bf <- lm(Total_vol ~ `7D_Temp` + `3D_Temp` + Cancer_Status + 
+    Ext_Temp + Glycemy + Sex + Age - 1,
+                     data=training_data_w_bf)
+summary(fit_final_w_bf)
+extractAIC(fit_final_w_bf)
+```
+
+Note the strong increase in the adjusted $R^2$ (more than tripled), also AIC slightly decreases.
+
+## MODEL DIAGNOSTICs
+
+```{r}
+qqnorm(fit_final_w_bf$residuals)
+qqline(fit_final_w_bf$residuals)
+shapiro.test(fit_final_w_bf$residuals)
+```
+
+As normality is violated, we shall perform a Box-Cox transformation.
+```{r}
+result <- boxcox(fit_final_w_bf)
+lambda <- result$x[which.max(result$y)]
+paste("As lambda=", lambda, "is close to 0, we instead take the ln transformation")
+```
+
+We re-fit the model as follows:
+```{r}
+fit_final_w_bf <- lm(log(Total_vol) ~ `7D_Temp` + `3D_Temp` + Cancer_Status 
+                     + Ext_Temp + Glycemy + Sex + Age - 1,
+                     data=training_data_w_bf)
+summary(fit_final_w_bf)
+extractAIC(fit_final_w_bf)
+```
+
+While adjusted $R^2$ and AIC are at an all time high and low respectively, a lot of the covariates now have quite high p-values. Because of this, we'll now turn to the interaction model.
+
+## INTERACTION MODEL
+
+```{r}
+fit_full_w_bf_inter <- lm(Total_vol ~ (. -Id -BrownFat)^2 , data=training_data_w_bf) # full model
+fit_intercept_w_bf_inter <- lm(Total_vol ~ 1, data=training_data_w_bf) # intercept model
+
+step_w_bf_inter <- stepAIC(fit_intercept_w_bf, 
+                scope=list(upper=fit_full_w_bf_inter, lower=fit_intercept_w_bf_inter),
+                direction="both", trace=0)
+```
+
+```{r}
+summary(step_w_bf_inter)
+```
+
+The final inter. model by step-wise regression is given by:
+```{r}
+fit_final_w_bf_inter <- lm(Total_vol ~ `7D_Temp` + `3D_Temp` + Cancer_Status + 
+    Ext_Temp + Glycemy + Sex + `7D_Temp`:Ext_Temp,, 
+    data = training_data_w_bf)
+summary(fit_final_w_bf_inter)
+extractAIC(fit_final_w_bf_inter)
+```
+Once again, we shall remove the intercept, as well as from the diagnostics done previously, we shall take log base $e$ transformation on the response variable:
+
+```{r}
+fit_final_w_bf_inter <- lm(log(Total_vol) ~ `7D_Temp` + `3D_Temp` + Cancer_Status + 
+    Ext_Temp + Glycemy + Sex + `7D_Temp`:Ext_Temp - 1, 
+    data = training_data_w_bf)
+summary(fit_final_w_bf_inter)
+```
+Observe that the p-values for the interaction model is much smaller overall compared to the original model created. However, there are some covariates we may consider removing:
+
+- `3D_Temp`: This is mostly likely because of quadratic term `7D_Temp*3D_Temp` and as well as their high correlation, making this variable insignificant for prediction.
+- `Sex`: While men and women do have slightly varying levels of brown fat (if possessed) as saw in the EDA section, this difference is not significant, though, this may be a result of the training on a small dataset.
+- `Ext_Temp`: Because of high correlation with `3D_Temp` as well as `7D_Temp`.
+
+This is the final interaction model after removing some (possibly-)insignifcant predictors.
+
+```{r}
+fit_final_w_bf_inter <- lm(log(Total_vol) ~ `7D_Temp` + Cancer_Status + `7D_Temp`:Ext_Temp  - 1, data = training_data_w_bf)
+summary(fit_final_w_bf_inter)
+extractAIC(fit_final_w_bf_inter)
+```
+As a result, all p-values for the remaining predictors are now all quite low.
+
+NOTE: PERFORM WLS (much better results)
