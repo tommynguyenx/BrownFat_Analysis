@@ -203,6 +203,21 @@ While adjusted $R^2$ and AIC are at an all time high and low respectively, a lot
 ## INTERACTION MODEL
 
 ```{r}
+# center all quantitative vars to avoid multi-collinearity
+# training_data_w_bf$Age = training_data_w_bf$Age - mean(training_data_w_bf$Age)
+# training_data_w_bf$Day = training_data_w_bf$Day - mean(training_data_w_bf$Day)
+# training_data_w_bf$Ext_Temp = training_data_w_bf$Ext_Temp - mean(training_data_w_bf$Ext_Temp)
+# training_data_w_bf$`2D_Temp` = training_data_w_bf$`2D_Temp` - mean(training_data_w_bf$`2D_Temp`)
+# training_data_w_bf$`3D_Temp` = training_data_w_bf$`3D_Temp` - mean(training_data_w_bf$`3D_Temp`)
+# training_data_w_bf$`7D_Temp` = training_data_w_bf$`7D_Temp` - mean(training_data_w_bf$`7D_Temp`)
+# training_data_w_bf$`1M_Temp` = training_data_w_bf$`1M_Temp` - mean(training_data_w_bf$`1M_Temp`)
+# training_data_w_bf$Duration_Sunshine = training_data_w_bf$Duration_Sunshine - mean(training_data_w_bf$Duration_Sunshine)
+# training_data_w_bf$Weigth = training_data_w_bf$Weigth - mean(training_data_w_bf$Weigth)
+# training_data_w_bf$Size = training_data_w_bf$Size - mean(training_data_w_bf$Size)
+# training_data_w_bf$BMI = training_data_w_bf$BMI - mean(training_data_w_bf$BMI)
+# training_data_w_bf$Glycemy = training_data_w_bf$Glycemy - mean(training_data_w_bf$Glycemy)
+# training_data_w_bf$LBW = training_data_w_bf$LBW - mean(training_data_w_bf$LBW)
+
 fit_full_w_bf_inter <- lm(Total_vol ~ (. -Id -BrownFat)^2 , data=training_data_w_bf) # full model
 fit_intercept_w_bf_inter <- lm(Total_vol ~ 1, data=training_data_w_bf) # intercept model
 
@@ -218,7 +233,7 @@ summary(step_w_bf_inter)
 The final inter. model by step-wise regression is given by:
 ```{r}
 fit_final_w_bf_inter <- lm(Total_vol ~ `7D_Temp` + `3D_Temp` + Cancer_Status + 
-    Ext_Temp + Glycemy + Sex + `7D_Temp`:Ext_Temp,, 
+    Ext_Temp + Glycemy + Sex + `7D_Temp`:Ext_Temp,
     data = training_data_w_bf)
 summary(fit_final_w_bf_inter)
 extractAIC(fit_final_w_bf_inter)
@@ -236,14 +251,69 @@ Observe that the p-values for the interaction model is much smaller overall comp
 - `3D_Temp`: This is mostly likely because of quadratic term `7D_Temp*3D_Temp` and as well as their high correlation, making this variable insignificant for prediction.
 - `Sex`: While men and women do have slightly varying levels of brown fat (if possessed) as saw in the EDA section, this difference is not significant, though, this may be a result of the training on a small dataset.
 - `Ext_Temp`: Because of high correlation with `3D_Temp` as well as `7D_Temp`.
+- `Glycemy`: High p-value.
 
 This is the final interaction model after removing some (possibly-)insignifcant predictors.
 
 ```{r}
-fit_final_w_bf_inter <- lm(log(Total_vol) ~ `7D_Temp` + Cancer_Status + `7D_Temp`:Ext_Temp  - 1, data = training_data_w_bf)
+fit_final_w_bf_inter <- lm(log(Total_vol) ~ `7D_Temp` + Cancer_Status + `7D_Temp`:Ext_Temp - 1, data = training_data_w_bf)
 summary(fit_final_w_bf_inter)
 extractAIC(fit_final_w_bf_inter)
 ```
-As a result, all p-values for the remaining predictors are now all quite low. However also note the low no. of covariates, this could lead to bad generalization in larger datasets.
+As a result, all p-values for the remaining predictors are now all quite low. However also note the low no. of covariates, this could lead to bad generalization in larger data-sets. Also that the interaction model is not that much better than the original linear model.
 
 NOTE: PERFORM WLS (much better results)
+
+
+## MODEL VALIDATION
+
+First, we will see the accuracy on initial classification problem.
+```{r}
+# for testing data.
+predicted_classes <- ifelse(predict(fit_final, testing_data) >= 0.5, 1, 0)
+actual_classes <- testing_data$BrownFat
+
+paste("testing accuracy:", sum(predicted_classes == actual_classes) / nrow(testing_data))
+
+# for training data.
+predicted_classes <- ifelse(predict(fit_final, training_data) >= 0.5, 1, 0)
+actual_classes <- training_data$BrownFat
+
+paste("training accuracy:", sum(predicted_classes == actual_classes) / nrow(training_data))
+```
+We observe a 92% accuracy on the testing set, and 93% accuracy on the training set, overall pretty good, and minimal overfitting.
+
+Now we proceed to estimate the exact vol. of those w/ some level of brown fat.
+
+```{r}
+# for testing dataset
+predicted_classes <- ifelse(predict(fit_final, testing_data) >= 0.5, 1, 0)
+
+predicted_vols <- rep(0, times=nrow(testing_data))
+for (i in 1:nrow(testing_data)) {
+  if (predicted_classes[i] == 1) {
+    predicted_vols[i] <- exp(predict(fit_final_w_bf_inter, testing_data[i, ])) 
+  }
+}
+
+actual_vols <- testing_data$Total_vol
+
+mspe <- mean((predicted_vols - actual_vols)^2)
+mspe
+
+# for training data set
+predicted_classes <- ifelse(predict(fit_final, training_data) >= 0.5, 1, 0)
+
+predicted_vols <- rep(0, times=nrow(training_data))
+for (i in 1:nrow(training_data)) {
+  if (predicted_classes[i] == 1) {
+    predicted_vols[i] <- exp(predict(fit_final_w_bf_inter, training_data[i, ])) 
+  }
+}
+
+actual_vols <- training_data$Total_vol
+
+mspe <- mean((predicted_vols - actual_vols)^2)
+mspe
+```
+
