@@ -1,6 +1,7 @@
 ---
 title: "brownfat"
-output: html_document
+output: pdf_document....0
+
 ---
 
 ```{r}
@@ -9,6 +10,7 @@ library(dplyr)
 library(ggplot2)
 library(pheatmap)
 library(car)
+library(gridExtra)
 ```
 
 Read the file:
@@ -92,51 +94,52 @@ brownfat_cleaned_data_v2 <- brownfat_cleaned_data %>%
 ```
 
 Lets check for the distribution of the age:
-    ```{r}
-ggplot(data = brownfat_cleaned_data_v2, aes(x = Sex)) +
+```{r}
+g1 <- ggplot(data = brownfat_cleaned_data_v2, aes(x = Sex)) +
     geom_bar(fill = "grey")+
     ggtitle("Bar Plot of Sex")
 
-ggplot(data = brownfat_cleaned_data_v2, aes(x = Diabetes)) +
+g2 <- ggplot(data = brownfat_cleaned_data_v2, aes(x = Diabetes)) +
     geom_bar(fill = "grey")+
     ggtitle("Bar Plot of Diabetes")
 
-ggplot(data = brownfat_cleaned_data_v2, aes(x = Age))+
+g3 <- ggplot(data = brownfat_cleaned_data_v2, aes(x = Age))+
     geom_histogram()
-ggplot(data = brownfat_cleaned_data_v2, aes(x = Day))+
+
+g4 <- ggplot(data = brownfat_cleaned_data_v2, aes(x = Day))+
     geom_histogram()
-brownfat_cleaned_data_v2$Month <- factor(brownfat_cleaned_data_v2$Month, levels = 1:12)
-ggplot(data = brownfat_cleaned_data_v2, aes(x = Month))+
+##brownfat_cleaned_data_v2$Month <- factor(brownfat_cleaned_data_v2$Month, levels = 1:12)
+g5 <- ggplot(data = brownfat_cleaned_data_v2, aes(x = Month))+
     geom_bar()
-ggplot(data = brownfat_cleaned_data_v2, aes(x = Ext_Temp))+
+g6 <- ggplot(data = brownfat_cleaned_data_v2, aes(x = Ext_Temp))+
     geom_histogram()
-ggplot(data = brownfat_cleaned_data_v2, aes(x = `2D_Temp`))+
+g7 <- ggplot(data = brownfat_cleaned_data_v2, aes(x = `2D_Temp`))+
     geom_histogram()
-ggplot(data = brownfat_cleaned_data_v2, aes(x = `3D_Temp`))+
+g8 <- ggplot(data = brownfat_cleaned_data_v2, aes(x = `3D_Temp`))+
     geom_histogram()
-ggplot(data = brownfat_cleaned_data_v2, aes(x = `7D_Temp`))+
+g9 <- ggplot(data = brownfat_cleaned_data_v2, aes(x = `7D_Temp`))+
     geom_histogram()
-ggplot(data = brownfat_cleaned_data_v2, aes(x = `1M_Temp`))+
+g10 <- ggplot(data = brownfat_cleaned_data_v2, aes(x = `1M_Temp`))+
     geom_histogram()
-ggplot(data = brownfat_cleaned_data_v2, aes(x = Duration_Sunshine))+
+g11 <- ggplot(data = brownfat_cleaned_data_v2, aes(x = Duration_Sunshine))+
     geom_histogram()
-ggplot(data = brownfat_cleaned_data_v2, aes(x = Weigth))+
+g12 <- ggplot(data = brownfat_cleaned_data_v2, aes(x = Weigth))+
     geom_histogram()
-ggplot(data = brownfat_cleaned_data_v2, aes(x = Size))+
+g13 <- ggplot(data = brownfat_cleaned_data_v2, aes(x = Size))+
     geom_histogram()
-ggplot(data = brownfat_cleaned_data_v2, aes(x = BMI))+
+g14 <- ggplot(data = brownfat_cleaned_data_v2, aes(x = BMI))+
     geom_histogram()
-ggplot(data = brownfat_cleaned_data_v2, aes(x = Glycemy))+
+g15 <-ggplot(data = brownfat_cleaned_data_v2, aes(x = Glycemy))+
     geom_histogram()
-ggplot(data = brownfat_cleaned_data_v2, aes(x = LBW))+
+g16 <- ggplot(data = brownfat_cleaned_data_v2, aes(x = LBW))+
     geom_histogram()
-ggplot(data = brownfat_cleaned_data_v2, aes(x = Cancer_Status)) +
+g17 <- ggplot(data = brownfat_cleaned_data_v2, aes(x = Cancer_Status)) +
     geom_bar(fill = "grey")+
     ggtitle("Bar Plot of Cancer Status")
-ggplot(data = brownfat_cleaned_data_v2, aes(x = Cancer_Type)) +
+g18 <- ggplot(data = brownfat_cleaned_data_v2, aes(x = Cancer_Type)) +
     geom_bar(fill = "grey")+
     ggtitle("Bar Plot of Cancer Type")
-ggplot(data = brownfat_cleaned_data_v2, aes(x = Total_vol))+
+g19 <- ggplot(data = brownfat_cleaned_data_v2, aes(x = Total_vol))+
     geom_histogram()
 
 # Separate response variable into 2 cases:
@@ -144,22 +147,26 @@ no_brownfat <- subset(brownfat_cleaned_data_v2, Total_vol == 0)
 has_brownfat <- subset(brownfat_cleaned_data_v2, Total_vol > 0)
 
 # Plot with no brown fat: 
-ggplot(no_brownfat, aes(x = Total_vol)) +
+g20 <- ggplot(no_brownfat, aes(x = Total_vol)) +
   geom_histogram(binwidth = 10, color = "black", fill = "red") +
   ggtitle("Individuals with No Brown Fat")
 
 # Plot with some brown fat:
-ggplot(has_brownfat, aes(x = Total_vol)) +
+g21 <- ggplot(has_brownfat, aes(x = Total_vol)) +
   geom_histogram(binwidth = 10, color = "black", fill = "blue") +
   ggtitle("Individuals with Brown Fat")
+
+grid.arrange(g1, g2, g5, g17, g18, ncol = 3, nrow = 2)
+
+grid.arrange(g3, g4, g6, g7, g8, g9, g10, g11, g12, ncol = 3, nrow = 3)
+
+grid.arrange(g13, g14, g15, g16, g19, g20, g21, ncol = 3, nrow = 3)
+
 ```
 
 ```{r}
 mean_age <- mean(brownfat_cleaned_data_v2$Age)
 mean_age
-```
-- The explanatory variable Age seems to follow approximately close to a normal distribution with a mean of 61.82. The sample looks skewed toward the elderly side of the adults.
-```{r}
 mean_ext_temp <- mean(brownfat_cleaned_data_v2$Ext_Temp)
 mean_ext_temp
 mean_weight <- mean(brownfat_cleaned_data_v2$Weigth)
@@ -172,6 +179,7 @@ mean_LBW <- mean(brownfat_cleaned_data_v2$LBW)
 mean_LBW
 
 ```
+- The explanatory variable Age seems to follow approximately close to a normal distribution with a mean of 61.82. The sample looks skewed toward the elderly side of the adults.
 
 - The majority of people tested did not have diabetes.
 
@@ -197,7 +205,6 @@ The correlation matrix of the model is given by:
 brownfat_cleaned_data_v2$Month <- as.numeric(factor(brownfat_cleaned_data_v2$Month))
 cor_matrix <- cor(brownfat_cleaned_data_v2)
 pheatmap(cor_matrix, display_numbers = TRUE, cluster_rows = FALSE, cluster_cols = FALSE)
-
 ```
 We notice that:
 - All the temperature covariates are strongly, positively correlated to each other. 
