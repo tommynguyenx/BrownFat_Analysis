@@ -256,9 +256,9 @@ Observe that the p-values for the interaction model is much smaller overall comp
 This is the final interaction model after removing some (possibly-)insignifcant predictors.
 
 ```{r}
-fit_final_w_bf_inter <- lm(log(Total_vol) ~ `7D_Temp` + Cancer_Status + `7D_Temp`:Ext_Temp - 1, data = training_data_w_bf)
-summary(fit_final_w_bf_inter)
-extractAIC(fit_final_w_bf_inter)
+fit_final_w_bf_inter_trimmed <- lm(log(Total_vol) ~ `7D_Temp` + Cancer_Status + `7D_Temp`:Ext_Temp - 1, data = training_data_w_bf)
+summary(fit_final_w_bf_inter_trimmed)
+extractAIC(fit_final_w_bf_inter_trimmed)
 ```
 As a result, all p-values for the remaining predictors are now all quite low. However also note the low no. of covariates, this could lead to bad generalization in larger data-sets. Also that the interaction model is not that much better than the original linear model.
 
@@ -267,53 +267,97 @@ NOTE: PERFORM WLS (much better results)
 
 ## MODEL VALIDATION
 
-First, we will see the accuracy on initial classification problem.
+The classification model is bad, none of the obs. would get classified as having brown fat, using a threshold of `0.5`. If we adjust the threshold to `sum(training_data$BrownFat == 1) / nrow(training_data) = 0.067` or roughly 0.7, we get much better results.
+
 ```{r}
-# for testing data.
-predicted_classes <- ifelse(predict(fit_final, testing_data) >= 0.5, 1, 0)
-actual_classes <- testing_data$BrownFat
+# threshold of 0.5
+predicted_test <- predict(fit_final, testing_data)
+predicted_test <- ifelse(predicted_test >= 0.5, 1, 0)
+actual <- testing_data$BrownFat
+sum(predicted_test == 1 & actual == 1) / sum(actual)
+sum(predicted_test == 1)
 
-paste("testing accuracy:", sum(predicted_classes == actual_classes) / nrow(testing_data))
+# threshold of 0.067 approx 0.07, for testing dataset
+predicted_test <- predict(fit_final, testing_data)
+predicted_test <- ifelse(predicted_test >= 0.07, 1, 0)
+actual <- testing_data$BrownFat
+sum(predicted_test == 1 & actual == 1) / sum(actual)
+sum(predicted_test == 1)
 
-# for training data.
-predicted_classes <- ifelse(predict(fit_final, training_data) >= 0.5, 1, 0)
-actual_classes <- training_data$BrownFat
-
-paste("training accuracy:", sum(predicted_classes == actual_classes) / nrow(training_data))
+# threshold of 0.067 approx 0.07, for training dataset
+predicted_train <- predict(fit_final, training_data)
+predicted_train <- ifelse(predicted_train >= 0.07, 1, 0)
+actual <- training_data$BrownFat
+sum(predicted_train == 1 & actual == 1) / sum(actual == 1)
+sum(predicted_train == 1)
 ```
-We observe a 92% accuracy on the testing set, and 93% accuracy on the training set, overall pretty good, and minimal overfitting.
 
-Now we proceed to estimate the exact vol. of those w/ some level of brown fat.
+We will try a RF implementation.
 
 ```{r}
+library(randomForest)
+# Convert BrownFat to a factor for classification
+training_data$BrownFat <- as.factor(training_data$BrownFat)
+
+
+training_data_cpy <- training_data %>%
+  dplyr::rename(TwoD_Temp = `2D_Temp`,
+                ThreeD_Temp = `3D_Temp`,
+                SevenD_Temp = `7D_Temp`,
+                OneM_Temp = `1M_Temp`)
+
+
+# Train the Random Forest model
+library(ROSE) # for over/under sampling
+over <- ovun.sample(BrownFat ~ . -Id -Total_vol, data=training_data_cpy,
+                    method = "over", N = table(training_data_cpy$BrownFat)[1]*2, seed = 222)$data
+
+fit_rf <- randomForest(BrownFat ~ . -Id -Total_vol, ntree = 100
+                       , data=over, mtry=5, nodesize = 10, maxnodes = 15)
+fit_rf
+```
+
+```{r}
+testing_data_cpy <- testing_data %>%
+  dplyr::rename(TwoD_Temp = `2D_Temp`,
+                ThreeD_Temp = `3D_Temp`,
+                SevenD_Temp = `7D_Temp`,
+                OneM_Temp = `1M_Temp`)
+predicted_rf <- factor(predict(fit_rf, testing_data_cpy), levels = c(0, 1)) 
+actual <- testing_data_cpy$BrownFat
+confusionMatrix(predicted_rf, reference = factor(actual, levels =c(0,1)))
+```
+
+Now, we shall evaluate the performance of our regression model.
+
+```{r}
+predicted_rf <- as.numeric(predicted_rf) - 1
+
 # for testing dataset
-predicted_classes <- ifelse(predict(fit_final, testing_data) >= 0.5, 1, 0)
-
-predicted_vols <- rep(0, times=nrow(testing_data))
 for (i in 1:nrow(testing_data)) {
-  if (predicted_classes[i] == 1) {
-    predicted_vols[i] <- exp(predict(fit_final_w_bf_inter, testing_data[i, ])) 
+  if (predicted[i] == 1) {
+    predicted_rf[i] <- predict(fit_final_w_bf_inter_trimmed, testing_data[i,])
   }
 }
+actual_vol <- testing_data_cpy$Total_vol
 
-actual_vols <- testing_data$Total_vol
-
-mspe <- mean((predicted_vols - actual_vols)^2)
+mspe <- mean((actual_vol - predicted_rf)^2)
 mspe
 
-# for training data set
-predicted_classes <- ifelse(predict(fit_final, training_data) >= 0.5, 1, 0)
+# for training
+predicted_rf <- factor(predict(fit_rf, training_data_cpy), levels = c(0, 1)) 
+#actual <- training_data_cpy$BrownFat
+#confusionMatrix(predicted_rf, reference = factor(actual, levels =c(0,1)))
 
-predicted_vols <- rep(0, times=nrow(training_data))
+predicted_rf <- as.numeric(predicted_rf) - 1
 for (i in 1:nrow(training_data)) {
-  if (predicted_classes[i] == 1) {
-    predicted_vols[i] <- exp(predict(fit_final_w_bf_inter, training_data[i, ])) 
+  if (predicted_rf[i] == 1) {
+    predicted_rf[i] <- predict(fit_final_w_bf_inter_trimmed, training_data[i,])
   }
 }
+actual_vol <- training_data$Total_vol
 
-actual_vols <- training_data$Total_vol
-
-mspe <- mean((predicted_vols - actual_vols)^2)
+mspe <- mean((actual_vol - predicted_rf)^2)
 mspe
 ```
-
+The MSPE is quite significant larger than the MSE_F, we are experience overfitting, may need to re-fit the model above.
