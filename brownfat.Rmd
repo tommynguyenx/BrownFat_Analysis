@@ -244,6 +244,6 @@ fit_final_w_bf_inter <- lm(log(Total_vol) ~ `7D_Temp` + Cancer_Status + `7D_Temp
 summary(fit_final_w_bf_inter)
 extractAIC(fit_final_w_bf_inter)
 ```
-As a result, all p-values for the remaining predictors are now all quite low.
+As a result, all p-values for the remaining predictors are now all quite low. However also note the low no. of covariates, this could lead to bad generalization in larger datasets.
 
 NOTE: PERFORM WLS (much better results)
