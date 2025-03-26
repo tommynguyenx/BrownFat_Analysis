@@ -87,32 +87,71 @@ brownfat_cleaned_data_v2 <- brownfat_cleaned_data %>%
 
 Lets check for the distribution of the age:
 ```{r}
+brownfat_cleaned_data_v2 <- brownfat_cleaned_data %>%
+    filter(!is.na(Cancer_Type))
+```
+
+Lets check for the distribution of the age:
+    ```{r}
+ggplot(data = brownfat_cleaned_data_v2, aes(x = Sex)) +
+    geom_bar(fill = "grey")+
+    ggtitle("Bar Plot of Sex")
+
+ggplot(data = brownfat_cleaned_data_v2, aes(x = Diabetes)) +
+    geom_bar(fill = "grey")+
+    ggtitle("Bar Plot of Diabetes")
+
 ggplot(data = brownfat_cleaned_data_v2, aes(x = Age))+
-  geom_histogram()
+    geom_histogram()
+ggplot(data = brownfat_cleaned_data_v2, aes(x = Day))+
+    geom_histogram()
+brownfat_cleaned_data_v2$Month <- factor(brownfat_cleaned_data_v2$Month, levels = 1:12)
+ggplot(data = brownfat_cleaned_data_v2, aes(x = Month))+
+    geom_bar()
 ggplot(data = brownfat_cleaned_data_v2, aes(x = Ext_Temp))+
-  geom_histogram()
+    geom_histogram()
 ggplot(data = brownfat_cleaned_data_v2, aes(x = `2D_Temp`))+
-  geom_histogram()
+    geom_histogram()
 ggplot(data = brownfat_cleaned_data_v2, aes(x = `3D_Temp`))+
-  geom_histogram()
+    geom_histogram()
 ggplot(data = brownfat_cleaned_data_v2, aes(x = `7D_Temp`))+
-  geom_histogram()
+    geom_histogram()
 ggplot(data = brownfat_cleaned_data_v2, aes(x = `1M_Temp`))+
-  geom_histogram()
+    geom_histogram()
 ggplot(data = brownfat_cleaned_data_v2, aes(x = Duration_Sunshine))+
-  geom_histogram()
+    geom_histogram()
 ggplot(data = brownfat_cleaned_data_v2, aes(x = Weigth))+
-  geom_histogram()
+    geom_histogram()
 ggplot(data = brownfat_cleaned_data_v2, aes(x = Size))+
-  geom_histogram()
+    geom_histogram()
 ggplot(data = brownfat_cleaned_data_v2, aes(x = BMI))+
-  geom_histogram()
+    geom_histogram()
 ggplot(data = brownfat_cleaned_data_v2, aes(x = Glycemy))+
-  geom_histogram()
+    geom_histogram()
 ggplot(data = brownfat_cleaned_data_v2, aes(x = LBW))+
-  geom_histogram()
+    geom_histogram()
+ggplot(data = brownfat_cleaned_data_v2, aes(x = Cancer_Status)) +
+    geom_bar(fill = "grey")+
+    ggtitle("Bar Plot of Cancer Status")
+ggplot(data = brownfat_cleaned_data_v2, aes(x = Cancer_Type)) +
+    geom_bar(fill = "grey")+
+    ggtitle("Bar Plot of Cancer Type")
 ggplot(data = brownfat_cleaned_data_v2, aes(x = Total_vol))+
-  geom_histogram()
+    geom_histogram()
+
+# Separate response variable into 2 cases:
+no_brownfat <- subset(brownfat_cleaned_data_v2, Total_vol == 0)
+has_brownfat <- subset(brownfat_cleaned_data_v2, Total_vol > 0)
+
+# Plot with no brown fat: 
+ggplot(no_brownfat, aes(x = Total_vol)) +
+  geom_histogram(binwidth = 10, color = "black", fill = "red") +
+  ggtitle("Individuals with No Brown Fat")
+
+# Plot with some brown fat:
+ggplot(has_brownfat, aes(x = Total_vol)) +
+  geom_histogram(binwidth = 10, color = "black", fill = "blue") +
+  ggtitle("Individuals with Brown Fat")
 ```
 
 ```{r}
@@ -123,10 +162,37 @@ mean_age
 ```{r}
 mean_ext_temp <- mean(brownfat_cleaned_data_v2$Ext_Temp)
 mean_ext_temp
+mean_weight <- mean(brownfat_cleaned_data_v2$Weigth)
+mean_weight
+mean_height <- mean(brownfat_cleaned_data_v2$Size)
+mean_height
+mean_BMI <- mean(brownfat_cleaned_data_v2$BMI)
+mean_BMI
+mean_LBW <- mean(brownfat_cleaned_data_v2$LBW)
+mean_LBW
+
 ```
+
+- The majority of people tested did not have diabetes.
+
+- The day/month people were tested were scattered around the year, not particularly focused on any day or interval.
+
 - The explanatory variable Ext_Temp seems to follow approximately but far from a normal distribution, with a mean of 6.
 
+- The weight of the people tested approximately follow a normal distribution with mean of 73.27kg.
+
+- The height of the people tested approximately follow a normal distribution with mean of 165.6cm.
+
+- The BMI of the people tested approximately follow a normal distribution with mean of 26.66.
+
+- The majority of the people tested has glycemia level in the interval of (5-10).
+
+- The LBW of the people tested approximately follow a normal distribution with mean of 51.53.
 The correlation matrix of the model is given by: 
+
+- The amount of tester with cancer is moderately higher than those without.
+
+- The most popular type of cancer is lung, digestive and non-Hodgkin lymphoma.
 ```{r}
 brownfat_cleaned_data_v2$Month <- as.numeric(factor(brownfat_cleaned_data_v2$Month))
 cor_matrix <- cor(brownfat_cleaned_data_v2)
@@ -142,22 +208,6 @@ We notice that:
 - Cancer status and cancer type are positively, moderately correlated to each other.
 
 Lets try centering the model:
+(Note: We tried centering, it just didn't work)
 
-```{r}
-brownfat_cleaned_data_v2$Ext_Temp <- brownfat_cleaned_data_v2$Ext_Temp - mean(brownfat_cleaned_data_v2$Ext_Temp)
 
-brownfat_cleaned_data_v2$`2D_Temp` <- brownfat_cleaned_data_v2$`2D_Temp` - mean(brownfat_cleaned_data_v2$`2D_Temp`) 
-
-brownfat_cleaned_data_v2$`3D_Temp` <- brownfat_cleaned_data_v2$`3D_Temp` - mean(brownfat_cleaned_data_v2$`3D_Temp`) 
-
-brownfat_cleaned_data_v2$`7D_Temp` <- brownfat_cleaned_data_v2$`7D_Temp` - mean(brownfat_cleaned_data_v2$`7D_Temp`)
-
-brownfat_cleaned_data_v2$`1M_Temp` <- brownfat_cleaned_data_v2$`1M_Temp` - mean(brownfat_cleaned_data_v2$`1M_Temp`) 
-
-brownfat_cleaned_data_v2$Season <- brownfat_cleaned_data_v2$Season - mean(brownfat_cleaned_data_v2$Season) 
-brownfat_cleaned_data_v2$Duration_Sunshine<- brownfat_cleaned_data_v2$Duration_Sunshine - mean(brownfat_cleaned_data_v2$Duration_Sunshine) 
-
-cor_matrix <- cor(brownfat_cleaned_data_v2)
-pheatmap(cor_matrix, display_numbers = TRUE, cluster_rows = FALSE, cluster_cols = FALSE)
-
-```
