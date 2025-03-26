@@ -332,7 +332,7 @@ Graph of relationship of cancer status vs total volume:
 ```{r}
 ggplot(brownfat_cleaned_data_v2, aes(x = factor(Cancer_Type), y = Total_vol)) + 
   geom_boxplot() + 
-  labs(title = "Diabetes vs total volume: box plot")
+  labs(title = "Cancer type vs total volume: box plot")
 ```
 
 
