@@ -11,6 +11,7 @@ library(ggplot2)
 library(pheatmap)
 library(car)
 library(gridExtra)
+library(tidyr)
 ```
 
 Read the file:
@@ -216,5 +217,122 @@ We notice that:
 
 Lets try centering the model:
 (Note: We tried centering, it just didn't work)
+
+Lets try finding the relationship between the temperature covariates and the total volumes:
+```{r}
+# graph relationship between external temperature and total volume
+ggplot(brownfat_cleaned_data_v2, aes(Ext_Temp, Total_vol)) +
+  geom_point(color = "black", size = 2) +
+  geom_smooth(method = "lm", se = FALSE, colour = "red")
+
+# graph relationship between 2D_temp and total volume
+ggplot(brownfat_cleaned_data_v2, aes(`2D_Temp`, Total_vol)) +
+  geom_point(color = "brown", size = 2) +
+  geom_smooth(method = "lm", se = FALSE, colour = "pink")
+
+# graph relationship between 3D_temp and total volume
+ggplot(brownfat_cleaned_data_v2, aes(`3D_Temp`, Total_vol)) +
+  geom_point(color = "darkblue", size = 2) +
+  geom_smooth(method = "lm", se = FALSE, colour = "green")
+
+# graph relationship between 7D_temp and total volume
+ggplot(brownfat_cleaned_data_v2, aes(`7D_Temp`, Total_vol)) +
+  geom_point(color = "violet", size = 2) +
+  geom_smooth(method = "lm", se = FALSE, colour = "orange")
+
+# graph relationship between 3D_temp and total volume
+ggplot(brownfat_cleaned_data_v2, aes(`1M_Temp`, Total_vol)) +
+  geom_point(color = "blue", size = 2) +
+  geom_smooth(method = "lm", se = FALSE, colour = "yellow")
+
+# overlap them:
+brownfat_long <- brownfat_cleaned_data_v2 %>%
+  pivot_longer(cols = c(Ext_Temp, `2D_Temp`, `3D_Temp`, `7D_Temp`,  `1M_Temp`),
+               names_to = "Temperature_Type",
+               values_to = "Temperature_Value")
+
+# Create overlapping plot
+ggplot(brownfat_long, aes(x = Temperature_Value, y = Total_vol, color = Temperature_Type)) +
+  geom_point(alpha = 0.6, size = 2) +  # Scatter points with transparency
+  geom_smooth(method = "lm", se = FALSE) +  # Linear trend lines
+  theme_minimal() +
+  labs(title = "Temperature vs Total Volume",
+       x = "Temperature Value",
+       y = "Total Volume",
+       color = "Temperature Type") +  # Legend title
+  theme(legend.position = "right")  # Move legend to the right
+
+```
+
+```{r}
+#Graph sex vs total volume:
+ggplot(brownfat_cleaned_data_v2, aes(x = factor(Sex), y = Total_vol)) + 
+  geom_boxplot() +
+  labs(title = "sex vs total volume: box plot")
+```
+
+Comment: female tester generally has higher brown fat volume than male.
+
+```{r}
+#Graphing Age vs Total_volume
+ggplot(brownfat_cleaned_data_v2, aes(Age, Total_vol)) +
+  geom_point(color = "black", size = 2) +
+  geom_smooth(method = "lm", se = FALSE, colour = "red")
+```
+
+```{r}
+#graph the relationship between Weight, LBW, BMI to total volume.
+
+brownfat_long <- brownfat_cleaned_data_v2 %>%
+  pivot_longer(cols = c(Weigth, BMI, LBW ),
+               names_to = "Weight_types",
+               values_to = "Values")
+
+# Create overlapping plot
+ggplot(brownfat_long, aes(x = Values, y = Total_vol, color = Weight_types)) +
+  geom_point(alpha = 0.6, size = 2) +  # Scatter points with transparency
+  geom_smooth(method = "lm", se = FALSE) +  # Linear trend lines
+  theme_minimal() +
+  labs(title = "Weight, BMI and LBW",
+       x = "Weights",
+       y = "Total Volume",
+       color = "Weight Type") +  # Legend title
+  theme(legend.position = "right")  # Move legend to the right
+```
+
+Graph the relationship between Weight, BMI and LBW to the total volume:
+```{r}
+ggplot(brownfat_cleaned_data_v2, aes(x = factor(Diabetes), y = Total_vol)) + 
+  geom_boxplot() +
+  labs(title = "Diabetes vs total volume: box plot")
+```
+
+Comment: Those without diabetes have more brown fat than those with diabetes.
+
+Graph the relationship between Weight, BMI and LBW to the total volume:
+
+```{r}
+# Relationship between Glycemia and total volume.
+
+ggplot(brownfat_cleaned_data_v2, aes(Glycemy, Total_vol)) +
+  geom_point(color = "black", size = 2) +
+  geom_smooth(method = "lm", se = FALSE, colour = "red")
+```
+
+Graph of relationship of cancer status vs total volume:
+
+```{r}
+ggplot(brownfat_cleaned_data_v2, aes(x = factor(Cancer_Status), y = Total_vol)) + 
+  geom_boxplot() + 
+  labs(title = "Diabetes vs total volume: box plot")
+```
+
+Graph of relationship of cancer status vs total volume:
+
+```{r}
+ggplot(brownfat_cleaned_data_v2, aes(x = factor(Cancer_Type), y = Total_vol)) + 
+  geom_boxplot() + 
+  labs(title = "Diabetes vs total volume: box plot")
+```
 
 
