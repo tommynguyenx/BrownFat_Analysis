@@ -88,6 +88,16 @@ brownfat_cleaned_data_v2 <- brownfat_cleaned_data %>%
 
 ## MODEL SELECTION
 
+Due to the majority of the data having `Total_vol` as $0$, we will built a sort of 2-step model, where the first thing to determine is which of 2 groups does the data point fall under: `Total_vol` is $0$ or $>0$. If it belong to the latter group, we predict the volume using a regression function built on training_data w/ `Total_vol` being positive.
+
+First, we shall build the model to determine which of the 2 groups does the data point belong to.
+
+```{r}
+# make Y categorical
+brownfat_cleaned_data_v2$BrownFat <- ifelse(brownfat_cleaned_data_v2$Total_vol > 0,
+                                            1, 0)
+```
+
 We will partition the cleaned data (version 2) into 2 equal parts: training and testing dataset. (70/30)
 
 ```{r}
@@ -95,13 +105,17 @@ set.seed("15")
 training_data <- brownfat_cleaned_data_v2 %>%
   slice_sample(prop = 0.7)
 testing_data <- anti_join(brownfat_cleaned_data_v2, training_data)
+
+# consider the training data >0 brownfat
+training_data_w_bf <- training_data %>%
+  filter(BrownFat > 0)
 ```
 
-We shall perform Step-wise Regression on our training data.
+Next, we shall perform Step-wise Regression.
 
 ```{r}
-fit_full <- lm(Total_vol ~ . -Id , data=training_data) # full model
-fit_intercept <- lm(Total_vol ~ 1, data=training_data) # intercept model
+fit_full <- lm(BrownFat ~ . -Id -Total_vol , data=training_data) # full model
+fit_intercept <- lm(BrownFat ~ 1, data=training_data) # intercept model
 
 step <- stepAIC(fit_intercept, 
                 scope=list(upper=fit_full, lower=fit_intercept),
@@ -111,4 +125,13 @@ step <- stepAIC(fit_intercept,
 ```{r}
 summary(step)
 step$anova
+```
+
+Recall `1M_Temp` and `Ext_Temp` are highly correlated as well as the p-value testing for regression coefficient associated w/ `1M_Temp` is larger than $\alpha = 0.05$, we will drop the covariate `1M_Temp`. Thus our final model after step-wise regression is as follows:
+
+```{r}
+fit_final <- lm(BrownFat ~ Age + Ext_Temp + Diabetes + Sex + 
+                  Weigth + Season + Duration_Sunshine,
+                data=training_data)
+summary(fit_final)
 ```
