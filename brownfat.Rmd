@@ -6,6 +6,8 @@ output: html_document
 ```{r}
 library(readxl)
 library(dplyr)
+library(MPV)
+library(ggplot2)
 ```
 
 Read the file:
@@ -28,7 +30,7 @@ x[x > 0]
 Notice that $4425$ out of $n=4842$ observations had no data on their `TSH`, as this ratio is too large in order for us to confidently assign the most-probable values, we will choose to exclude the variable `TSH` altogether.
 
 ```{r}
-brownfat_cleaned_data <- brownfat %>% select(-c("TSH"))
+brownfat_cleaned_data <- brownfat %>% dplyr::select(-c("TSH"))
 ```
 
 There are observations where both the `Cancer_Status` and `Cancer_Type` is set to NA, as we don't have domain knowledge to assign appropriate values nor is it the main focus of this research, we will simply exclude these observations.
@@ -82,4 +84,106 @@ brownfat_cleaned_data_v2 <- brownfat_cleaned_data %>%
   filter(!is.na(Cancer_Type))
 ```
 
-sds
+## MODEL SELECTION
+
+We are to do cross-validation, i.e. divide our data into 2 sets, training and validation, using a 70/30 split.
+
+```{r}
+# we first exclude non-important cols, i.e. Id
+brownfat_cleaned_data_v2 <- brownfat_cleaned_data_v2[, -1]
+
+set.seed(14)
+brownfat.sample <- sample(1:nrow(brownfat_cleaned_data_v2),
+                          floor(0.7*nrow(brownfat_cleaned_data_v2)),
+                          replace = FALSE) # sample w/o replacement
+brownfat.train <- brownfat_cleaned_data_v2[brownfat.sample, ] # model-building data
+brownfat.test <- brownfat_cleaned_data_v2[-brownfat.sample, ] # validation data
+```
+
+We perform step-wise regression to find the fitted model to predict $Y$, i.e. `Total_vol`, using the training data set.
+
+```{r}
+fit.simple <- lm(Total_vol ~ 1, data=brownfat.train) # intercept model
+fit.full <- lm(Total_vol ~ ., data=brownfat.train) # full model
+
+fit.stepwise <- step(fit.simple, scope = list(upper=fit.full, lower=fit.simple),
+                     direction="both", trace=0)
+```
+
+This is the obtained model's prediction power, using step-wise regression.
+```{r}
+model <- summary(fit.stepwise)
+n <- nrow(brownfat.train)
+p_prime <- length(fit.stepwise$coefficients)
+aic <- extractAIC(fit.stepwise)[2]
+SSE <- sum(fit.stepwise$residuals^2)
+MSE_F <- anova(fit.full)["Residuals", "Mean Sq"]
+
+data.frame(R2 = model$r.squared, 
+           R2_adj = model$adj.r.squared,
+           C = SSE / MSE_F + 2*p_prime - n,
+           AIC = aic,
+           BIC = aic + log(n)*p_prime - 2*p_prime,
+           PRESS = PRESS(fit.stepwise))
+```
+
+Note the poor results overall on these metrics, however, to be sure, we will see if it is validated. We now head to find the MSPE and see if it is close to the MSE.
+
+```{r}
+pred.test <- predict(fit.stepwise, brownfat.test)
+delta.test <- brownfat.test$Total_vol - pred.test
+n.star <- nrow(brownfat.test)
+MSPE <- sum((delta.test)^2) / n.star
+paste("The MSPE is :", MSPE)
+
+MSE_R <- anova(fit.stepwise)["Residuals", "Mean Sq"]
+paste("The MSE is :", MSE_R)
+```
+Observe that the MSPE is almost double the MSE, this is not good as this suggests overfitting. We instead turn a new response variable, or more specifically, a transformation of Y, the `Total_vol`.
+
+We consider the ln transformation on Y, due to the fact that most of the values for Y is concentrated between 0 and 1, this will help to expand those differences and more easily fit their relationship.
+
+```{r}
+log.fit.simple <- lm(log(Total_vol+0.001) ~ 1, data=brownfat.train) # intercept model
+log.fit.full <- lm(log(Total_vol+0.001) ~ ., data=brownfat.train) # full model
+
+log.fit.stepwise <- step(log.fit.simple, 
+                         scope = list(upper=log.fit.full, lower=log.fit.simple),
+                         direction="both", trace=0)
+```
+
+```{r}
+summary(log.fit.stepwise)
+```
+Consider the following metrics once again:
+```{r}
+model <- summary(log.fit.stepwise)
+n <- nrow(brownfat.train)
+p_prime <- length(log.fit.stepwise$coefficients)
+aic <- extractAIC(log.fit.stepwise)[2]
+SSE <- sum(log.fit.stepwise$residuals^2)
+MSE_F <- anova(log.fit.full)["Residuals", "Mean Sq"]
+
+data.frame(R2 = model$r.squared, 
+           R2_adj = model$adj.r.squared,
+           C = SSE / MSE_F + 2*p_prime - n,
+           AIC = aic,
+           BIC = aic + log(n)*p_prime - 2*p_prime,
+           PRESS = PRESS(fit.stepwise))
+```
+Notice that these metrics only apply to the response variable log(Y + 0.001) and thus not comparable w/ the prev. obtain metrics on Y.
+
+Now, we once again try to validate the model.
+```{r}
+log.pred.test <- exp(predict(log.fit.stepwise, brownfat.test)) - 0.001
+log.delta.test <- brownfat.test$Total_vol - log.pred.test
+n.star <- nrow(brownfat.test)
+MSPE <- sum((log.delta.test)^2) / n.star
+paste("The MSPE is :", MSPE)
+
+MSE_R <- exp(anova(log.fit.stepwise)["Residuals", "Mean Sq"]) - 1
+paste("The MSE is :", MSE_R)
+```
+
+The difference is still very high now. To accommodate for poor model selection criterion and this difference, we can try interaction terms and/or quadratics now.
+
