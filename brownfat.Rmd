@@ -1,6 +1,6 @@
 ---
 title: "brownfat"
-output: pdf_document....0
+output: pdf_document
 
 ---
 
@@ -158,11 +158,7 @@ g21 <- ggplot(has_brownfat, aes(x = Total_vol)) +
   ggtitle("Individuals with Brown Fat")
 
 grid.arrange(g1, g2, g5, g17, g18, ncol = 3, nrow = 2)
-
-grid.arrange(g3, g4, g6, g7, g8, g9, g10, g11, g12, ncol = 3, nrow = 3)
-
-grid.arrange(g13, g14, g15, g16, g19, g20, g21, ncol = 3, nrow = 3)
-
+grid.arrange(g3, g4, g6, g7, g8, g9, g10, g11, g12, g13, g14, g15, g16, g19, g20, g21,ncol = 4, nrow = 4)
 ```
 
 ```{r}
@@ -178,7 +174,6 @@ mean_BMI <- mean(brownfat_cleaned_data_v2$BMI)
 mean_BMI
 mean_LBW <- mean(brownfat_cleaned_data_v2$LBW)
 mean_LBW
-
 ```
 - The explanatory variable Age seems to follow approximately close to a normal distribution with a mean of 61.82. The sample looks skewed toward the elderly side of the adults.
 
@@ -261,78 +256,80 @@ ggplot(brownfat_long, aes(x = Temperature_Value, y = Total_vol, color = Temperat
        y = "Total Volume",
        color = "Temperature Type") +  # Legend title
   theme(legend.position = "right")  # Move legend to the right
-
 ```
 
 ```{r}
 #Graph sex vs total volume:
-ggplot(brownfat_cleaned_data_v2, aes(x = factor(Sex), y = Total_vol)) + 
-  geom_boxplot() +
-  labs(title = "sex vs total volume: box plot")
-```
+p2 <- ggplot(brownfat_cleaned_data_v2, aes(x = factor(Sex), y = Total_vol)) + 
+  geom_boxplot() 
+  #labs(title = "sex vs total volume: box plot")
 
-Comment: female tester generally has higher brown fat volume than male.
-
-```{r}
 #Graphing Age vs Total_volume
-ggplot(brownfat_cleaned_data_v2, aes(Age, Total_vol)) +
+p3 <- ggplot(brownfat_cleaned_data_v2, aes(Age, Total_vol)) +
   geom_point(color = "black", size = 2) +
   geom_smooth(method = "lm", se = FALSE, colour = "red")
-```
 
-```{r}
 #graph the relationship between Weight, LBW, BMI to total volume.
-
 brownfat_long <- brownfat_cleaned_data_v2 %>%
   pivot_longer(cols = c(Weigth, BMI, LBW ),
                names_to = "Weight_types",
                values_to = "Values")
 
 # Create overlapping plot
-ggplot(brownfat_long, aes(x = Values, y = Total_vol, color = Weight_types)) +
+p4 <- ggplot(brownfat_long, aes(x = Values, y = Total_vol, color = Weight_types)) +
   geom_point(alpha = 0.6, size = 2) +  # Scatter points with transparency
   geom_smooth(method = "lm", se = FALSE) +  # Linear trend lines
   theme_minimal() +
-  labs(title = "Weight, BMI and LBW",
-       x = "Weights",
+  labs(x = "Weights",
        y = "Total Volume",
        color = "Weight Type") +  # Legend title
   theme(legend.position = "right")  # Move legend to the right
-```
 
-Graph the relationship between Weight, BMI and LBW to the total volume:
-```{r}
-ggplot(brownfat_cleaned_data_v2, aes(x = factor(Diabetes), y = Total_vol)) + 
-  geom_boxplot() +
-  labs(title = "Diabetes vs total volume: box plot")
-```
+#Graph Diabetes vs Total Volume
+p5 <- ggplot(brownfat_cleaned_data_v2, aes(x = factor(Diabetes), y = Total_vol)) + 
+  geom_boxplot() 
+  #labs(title = "Diabetes vs total volume: box plot")
 
-Comment: Those without diabetes have more brown fat than those with diabetes.
-
-Graph the relationship between Weight, BMI and LBW to the total volume:
-
-```{r}
 # Relationship between Glycemia and total volume.
-
-ggplot(brownfat_cleaned_data_v2, aes(Glycemy, Total_vol)) +
+p6 <- ggplot(brownfat_cleaned_data_v2, aes(Glycemy, Total_vol)) +
   geom_point(color = "black", size = 2) +
   geom_smooth(method = "lm", se = FALSE, colour = "red")
+
+# Graph of relationship of cancer status vs total volume:
+p7 <- ggplot(brownfat_cleaned_data_v2, aes(x = factor(Cancer_Status), y = Total_vol)) + 
+  geom_boxplot()  
+  #labs(title = "Cancer Status vs total volume: box plot")
+
+# Graph of relationship of cancer type vs total volume:
+p8 <- ggplot(brownfat_cleaned_data_v2, aes(x = factor(Cancer_Type), y = Total_vol)) + 
+  geom_boxplot() 
+  #labs(title = "Cancer type vs total volume: box plot")
+
+# Graph of relationship of Sex vs Weight:
+p9 <- ggplot(brownfat_cleaned_data_v2, aes(x = factor(Sex), y = Weigth)) + 
+  geom_boxplot()
+  #labs(title = "Sex vs Weight: box plot")
+
+# Graph of relationship of Sex vs Glycemia:
+p10 <- ggplot(brownfat_cleaned_data_v2, aes(x = factor(Sex), y = LBW)) + 
+  geom_boxplot()
+  #labs(title = "Sex vs LBW: box plot")
+
+# Graph of relationship of Cancer Status vs Age:
+p11 <- ggplot(brownfat_cleaned_data_v2, aes(x = factor(Cancer_Status), y = Age)) + 
+  geom_boxplot()
+  #labs(title = "Sex vs Cancer Status: box plot")
+
+# Relationship between Age and Size
+p12 <- ggplot(brownfat_cleaned_data_v2, aes(Age, Size)) +
+  geom_point(color = "black", size = 2) +
+  geom_smooth(method = "lm", se = FALSE, colour = "red")
+
+
+grid.arrange(p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, nrow = 4, ncol = 3)
+
 ```
 
-Graph of relationship of cancer status vs total volume:
 
-```{r}
-ggplot(brownfat_cleaned_data_v2, aes(x = factor(Cancer_Status), y = Total_vol)) + 
-  geom_boxplot() + 
-  labs(title = "Diabetes vs total volume: box plot")
-```
-
-Graph of relationship of cancer status vs total volume:
-
-```{r}
-ggplot(brownfat_cleaned_data_v2, aes(x = factor(Cancer_Type), y = Total_vol)) + 
-  geom_boxplot() + 
-  labs(title = "Cancer type vs total volume: box plot")
-```
 
 
