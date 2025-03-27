@@ -8,6 +8,7 @@ library(readxl)
 library(dplyr)
 library(MASS)
 library(MPV)
+library(caret)
 ```
 
 ## DATA CLEANING
@@ -172,7 +173,7 @@ summary(fit_final_w_bf)
 extractAIC(fit_final_w_bf)
 ```
 
-Note the strong increase in the adjusted $R^2$ (more than tripled), also AIC slightly decreases.
+Note the strong increase in the adjusted $R^2$ (more than tripled), also AIC slightly decreases. 
 
 ## MODEL DIAGNOSTICs
 
@@ -198,7 +199,7 @@ summary(fit_final_w_bf)
 extractAIC(fit_final_w_bf)
 ```
 
-While adjusted $R^2$ and AIC are at an all time high and low respectively, a lot of the covariates now have quite high p-values. Because of this, we'll now turn to the interaction model.
+While adjusted $R^2$ and AIC are at an all time high and low respectively, a lot of the covariates now have quite high p-values. Because of this, we'll now turn to the interaction model. (HOWEVER, keep in mind the $R^2$ and $R^2$ adjusted from the fitted model for $Y$ and for $\log(Y)$ is not comparable, use AIC instead). 
 
 ## INTERACTION MODEL
 
@@ -335,7 +336,7 @@ predicted_rf <- as.numeric(predicted_rf) - 1
 
 # for testing dataset
 for (i in 1:nrow(testing_data)) {
-  if (predicted[i] == 1) {
+  if (predicted_rf[i] == 1) {
     predicted_rf[i] <- predict(fit_final_w_bf_inter_trimmed, testing_data[i,])
   }
 }
@@ -345,7 +346,7 @@ mspe <- mean((actual_vol - predicted_rf)^2)
 mspe
 
 # for training
-predicted_rf <- factor(predict(fit_rf, training_data_cpy), levels = c(0, 1)) 
+predicted_rf <- factor(predict(fit_rf, training_data_cpy), levels = c(0, 1))
 #actual <- training_data_cpy$BrownFat
 #confusionMatrix(predicted_rf, reference = factor(actual, levels =c(0,1)))
 
