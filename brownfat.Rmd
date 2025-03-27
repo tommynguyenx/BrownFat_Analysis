@@ -8,6 +8,10 @@ library(readxl)
 library(dplyr)
 library(MPV)
 library(ggplot2)
+library(glmnet)
+library(caret)
+library(tidymodels)
+library(car)
 ```
 
 Read the file:
@@ -84,13 +88,21 @@ brownfat_cleaned_data_v2 <- brownfat_cleaned_data %>%
   filter(!is.na(Cancer_Type))
 ```
 
-## MODEL SELECTION
+## MODEL SELECTION - Initial Attempt
 
 We are to do cross-validation, i.e. divide our data into 2 sets, training and validation, using a 70/30 split.
 
 ```{r}
 # we first exclude non-important cols, i.e. Id
 brownfat_cleaned_data_v2 <- brownfat_cleaned_data_v2[, -1]
+# convert categorical to factors
+brownfat_cleaned_data_v2$Cancer_Status <- as.factor(brownfat_cleaned_data_v2$Cancer_Status)
+brownfat_cleaned_data_v2$Cancer_Type <- as.factor(brownfat_cleaned_data_v2$Cancer_Type)
+brownfat_cleaned_data_v2$Season <- as.factor(brownfat_cleaned_data_v2$Season)
+brownfat_cleaned_data_v2$Diabetes <- as.factor(brownfat_cleaned_data_v2$Diabetes)
+brownfat_cleaned_data_v2$Sex <- as.factor(brownfat_cleaned_data_v2$Sex)
+brownfat_cleaned_data_v2$Month <- as.factor(brownfat_cleaned_data_v2$Month)
+
 
 set.seed(14)
 brownfat.sample <- sample(1:nrow(brownfat_cleaned_data_v2),
@@ -106,8 +118,8 @@ We perform step-wise regression to find the fitted model to predict $Y$, i.e. `T
 fit.simple <- lm(Total_vol ~ 1, data=brownfat.train) # intercept model
 fit.full <- lm(Total_vol ~ ., data=brownfat.train) # full model
 
-fit.stepwise <- step(fit.simple, scope = list(upper=fit.full, lower=fit.simple),
-                     direction="both", trace=0)
+fit.stepwise <- stats::step(fit.simple, scope = list(upper=fit.full, lower=fit.simple),
+                     direction='both', trace=0)
 ```
 
 This is the obtained model's prediction power, using step-wise regression.
@@ -139,51 +151,208 @@ paste("The MSPE is :", MSPE)
 MSE_R <- anova(fit.stepwise)["Residuals", "Mean Sq"]
 paste("The MSE is :", MSE_R)
 ```
-Observe that the MSPE is almost double the MSE, this is not good as this suggests overfitting. We instead turn a new response variable, or more specifically, a transformation of Y, the `Total_vol`.
+Observe that the MSPE is almost double the MSE, this is not good as this suggests overfitting.
 
-We consider the ln transformation on Y, due to the fact that most of the values for Y is concentrated between 0 and 1, this will help to expand those differences and more easily fit their relationship.
+Perhaps an interaction/quadratic model would be better, we once again perform step-wise regression on the training data.
 
 ```{r}
-log.fit.simple <- lm(log(Total_vol+0.001) ~ 1, data=brownfat.train) # intercept model
-log.fit.full <- lm(log(Total_vol+0.001) ~ ., data=brownfat.train) # full model
-
-log.fit.stepwise <- step(log.fit.simple, 
-                         scope = list(upper=log.fit.full, lower=log.fit.simple),
-                         direction="both", trace=0)
+quad.fit.full <- lm(Total_vol ~ (.)^2, data=brownfat.train)
+quad.fit.stepwise <- stats::step(fit.simple, 
+                          scope=list(upper=quad.fit.full, lower=fit.simple),
+                          direction="both", trace=0)
+summary(quad.fit.stepwise)
+extractAIC(quad.fit.stepwise)
 ```
+We'll see if we are able to validate the model.
 
 ```{r}
-summary(log.fit.stepwise)
-```
-Consider the following metrics once again:
-```{r}
-model <- summary(log.fit.stepwise)
-n <- nrow(brownfat.train)
-p_prime <- length(log.fit.stepwise$coefficients)
-aic <- extractAIC(log.fit.stepwise)[2]
-SSE <- sum(log.fit.stepwise$residuals^2)
-MSE_F <- anova(log.fit.full)["Residuals", "Mean Sq"]
-
-data.frame(R2 = model$r.squared, 
-           R2_adj = model$adj.r.squared,
-           C = SSE / MSE_F + 2*p_prime - n,
-           AIC = aic,
-           BIC = aic + log(n)*p_prime - 2*p_prime,
-           PRESS = PRESS(fit.stepwise))
-```
-Notice that these metrics only apply to the response variable log(Y + 0.001) and thus not comparable w/ the prev. obtain metrics on Y.
-
-Now, we once again try to validate the model.
-```{r}
-log.pred.test <- exp(predict(log.fit.stepwise, brownfat.test)) - 0.001
-log.delta.test <- brownfat.test$Total_vol - log.pred.test
+pred.test <- predict(quad.fit.stepwise, brownfat.test)
+delta.test <- brownfat.test$Total_vol - pred.test
 n.star <- nrow(brownfat.test)
-MSPE <- sum((log.delta.test)^2) / n.star
+MSPE <- sum((delta.test)^2) / n.star
 paste("The MSPE is :", MSPE)
 
-MSE_R <- exp(anova(log.fit.stepwise)["Residuals", "Mean Sq"]) - 1
+MSE_R <- anova(quad.fit.stepwise)["Residuals", "Mean Sq"]
+paste("The MSE is :", MSE_R)
+```
+This is still not good, we'll try tinkering around with the final interaction model.
+
+```{r}
+model_final <- lm(Total_vol ~  `7D_Temp` + `3D_Temp` + `1M_Temp` + 
+    Ext_Temp + Sex + Weigth + Cancer_Status + Age:`7D_Temp` + 
+    Age:`3D_Temp` + Age:Ext_Temp + Age:`1M_Temp` + Age:Sex + 
+    `7D_Temp`:Weigth + `3D_Temp`:Weigth + Ext_Temp:Weigth + Sex:Weigth + 
+    `7D_Temp`:Cancer_Status + `3D_Temp`:Cancer_Status, 
+    data = brownfat.train)
+
+# check VIF for multicollinearity
+vif(model_final)
+```
+VIF values are very high for many predictors, consider centering the data.
+
+```{r}
+brownfat.train.centered <- brownfat.train %>%
+  mutate(`7D_Temp` = `7D_Temp` - mean(`7D_Temp`),
+         `3D_Temp` = `3D_Temp` - mean(`3D_Temp`),
+         `1M_Temp` = `1M_Temp` - mean(`1M_Temp`),
+         Ext_Temp = Ext_Temp - mean(Ext_Temp),
+         Weigth = Weigth - mean(Weigth),
+         Age = Age - mean(Age))
+
+model_final_centered <- lm(Total_vol ~  `7D_Temp` + `3D_Temp` + `1M_Temp` + 
+    Ext_Temp + Sex + Weigth + Cancer_Status + Age:`7D_Temp` + 
+    Age:`3D_Temp` + Age:Ext_Temp + Age:`1M_Temp` + Age:Sex + 
+    `7D_Temp`:Weigth + `3D_Temp`:Weigth + Ext_Temp:Weigth + Sex:Weigth + 
+    `7D_Temp`:Cancer_Status + `3D_Temp`:Cancer_Status, 
+    data = brownfat.train.centered)
+
+vif(model_final_centered)
+```
+We will remove all predictors w/ VIF > 10.
+
+```{r}
+model_final_centered <- lm(Total_vol ~ `7D_Temp` + `1M_Temp` + Ext_Temp + Sex + Weigth + Cancer_Status + Age:Ext_Temp + Age:`1M_Temp` + Age:Sex + `7D_Temp`:Weigth + Ext_Temp:Weigth + Sex:Weigth + `7D_Temp`:Age , 
+    data = brownfat.train.centered)
+summary(model_final_centered)
+
+vif(model_final_centered)
+```
+
+Perhaps our poor performance are due to outliers, we perform an analysis for outliers on the non-interaction stepwise model first.
+
+```{r}
+fit.stepwise.rstandard <- rstandard(fit.stepwise)
+fit.stepwise.rstudent <- rstudent(fit.stepwise)
+fit.stepwise.inf <- influence.measures(fit.stepwise)
+data.frame(fit.stepwise.rstandard, fit.stepwise.rstudent)
+fit.stepwise.inf
+```
+
+Some key graphs for diagnosis:
+
+```{r}
+library(ggpubr)
+library(olsrr)
+ols_plot_added_variable(fit.stepwise)
+ols_plot_cooksd_chart(fit.stepwise)
+ols_plot_dfbetas(fit.stepwise)
+ols_plot_dffits(fit.stepwise)
+ols_plot_resid_lev(fit.stepwise)
+ols_plot_resid_stud_fit(fit.stepwise)
+```
+We'll try to remove some observations:
+
+```{r}
+inf_data <- c()
+
+for (i in 1:nrow(brownfat.train)) {
+  if (sum(fit.stepwise.inf$is.inf[i, ]) > 0) {
+    inf_data <- c(inf_data, i)
+  }
+}
+
+brownfat.train_no.inf <- brownfat.train.centered[-inf_data,]
+
+fit.full_no.inf <- lm(Total_vol ~ (.)^2, data=brownfat.train_no.inf)
+fit.simple_no.inf <- lm(Total_vol ~ 1, data=brownfat.train_no.inf)
+fit.stepwise_no.inf <- stats::step(fit.simple_no.inf, 
+                            scope=list(upper=fit.full_no.inf, lower=fit.simple_no.inf),
+                            direction="both", trace=0)
+summary(fit.stepwise_no.inf)
+
+brownfat.test.centered <- brownfat.test %>%
+  mutate(`7D_Temp` = `7D_Temp` - mean(`7D_Temp`),
+         `3D_Temp` = `3D_Temp` - mean(`3D_Temp`),
+         `1M_Temp` = `1M_Temp` - mean(`1M_Temp`),
+         Ext_Temp = Ext_Temp - mean(Ext_Temp),
+         Weigth = Weigth - mean(Weigth),
+         Age = Age - mean(Age))
+
+pred.test <- predict(fit.stepwise_no.inf, brownfat.test.centered)
+delta.test <- brownfat.test.centered$Total_vol - pred.test
+n.star <- nrow(brownfat.test.centered)
+MSPE <- sum((delta.test)^2) / n.star
+paste("The MSPE is :", MSPE)
+
+MSE_R <- anova(fit.stepwise_no.inf)["Residuals", "Mean Sq"]
 paste("The MSE is :", MSE_R)
 ```
 
-The difference is still very high now. To accommodate for poor model selection criterion and this difference, we can try interaction terms and/or quadratics now.
+That didn't work, try a tobit model.
 
+```{r}
+library(AER)
+tobit_model <- tobit(log(Total_vol+1) ~ Sex + Age + BMI + Ext_Temp,
+                     , data = brownfat.train.centered
+                     , dist="gaussian")
+summary(tobit_model)
+
+
+pred.test <- exp(predict(tobit_model, brownfat.test.centered))-1
+delta.test <- brownfat.test.centered$Total_vol - pred.test
+n.star <- nrow(brownfat.test.centered)
+MSPE <- sum((delta.test)^2) / n.star
+paste("The MSPE is :", MSPE)
+
+pred.train <- exp(predict(tobit_model))-1
+MSE_R <- sum((brownfat.train$Total_vol - pred.train)^2) / tobit_model$df.residual
+paste("The MSE is :", MSE_R)
+```
+
+## MODEL SELECTION - 2-Model Approach
+
+There seems to be a pattern here, a data imbalance (i.e. where most has their `Total_vol = 0) exists, we may have to consider an alternative approach: Build 2 models.
+
+- Model 1: Classification model to predict if a patient has brown fat or not.
+- Model 2: Regression model to predict the volumn of brown fat, if the patient does possess some.
+
+### Model 1 : Classification
+
+We add a new categorical/dummy variable, `BrownFat`, which is 1 if `Total_vol > 0` and 0 otherwise.
+
+```{r}
+brownfat.train$BrownFat <- as.factor(ifelse(brownfat.train$Total_vol > 0, 1, 0))
+brownfat.test$BrownFat <- as.factor(ifelse(brownfat.test$Total_vol > 0, 1, 0))
+```
+
+We will try to fit a binary logistic regression model, using the entire training data set.
+
+```{r}
+model_1 <- logistic_reg(mixture = double(1), penalty = double(1)) %>%
+  set_engine("glmnet") %>%
+  set_mode("classification") %>%
+  fit(BrownFat ~ . -Total_vol, data = brownfat.train)
+
+tidy(model_1)
+```
+
+We'll observe the accuracy of this model.
+
+```{r}
+pred_proba <- predict(model_1, new_data = brownfat.test, type = "prob")
+threshold <- 0.05 # roughly % of training data w/ Brownfat == 1
+pred_class <- as.factor(ifelse(pred_proba$.pred_1 > threshold, 1, 0))
+
+confusionMatrix(pred_class, brownfat.test$BrownFat)
+```
+
+Although accuracy is quite low, just under 60%, specificity is much higher at 83%, and we are more concerned about correctly predicting class 1, i.e. class with some brown fat.
+
+### Model 2 : Regression
+
+Here, we perform step-wise regression on the training data set WITH Brownfat == 1.
+
+```{r}
+# get model-training set
+brownfat.train.wbf <- brownfat.train %>% filter(BrownFat == 1)
+brownfat.train.wbf <- brownfat.train.wbf %>% select(-"BrownFat")
+
+# perform stepwise regression
+fit.simple <- stats::lm(Total_vol ~ 1, data=brownfat.train.wbf)
+fit.full <- stats::lm(Total_vol ~ ., data=brownfat.train.wbf)
+fit.stepwise <- stats::step(fit.simple, scope=list(upper=fit.full, lower=fit.simple),
+                            direction="both", trace=0)
+summary(fit.stepwise)
+extractAIC(fit.stepwise)
+
+```
