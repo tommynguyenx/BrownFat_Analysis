@@ -104,7 +104,7 @@ brownfat_cleaned_data_v2$Sex <- as.factor(brownfat_cleaned_data_v2$Sex)
 brownfat_cleaned_data_v2$Month <- as.factor(brownfat_cleaned_data_v2$Month)
 
 
-set.seed(14)
+set.seed(500)
 brownfat.sample <- sample(1:nrow(brownfat_cleaned_data_v2),
                           floor(0.7*nrow(brownfat_cleaned_data_v2)),
                           replace = FALSE) # sample w/o replacement
@@ -278,81 +278,3 @@ MSE_R <- anova(fit.stepwise_no.inf)["Residuals", "Mean Sq"]
 paste("The MSE is :", MSE_R)
 ```
 
-That didn't work, try a tobit model.
-
-```{r}
-library(AER)
-tobit_model <- tobit(log(Total_vol+1) ~ Sex + Age + BMI + Ext_Temp,
-                     , data = brownfat.train.centered
-                     , dist="gaussian")
-summary(tobit_model)
-
-
-pred.test <- exp(predict(tobit_model, brownfat.test.centered))-1
-delta.test <- brownfat.test.centered$Total_vol - pred.test
-n.star <- nrow(brownfat.test.centered)
-MSPE <- sum((delta.test)^2) / n.star
-paste("The MSPE is :", MSPE)
-
-pred.train <- exp(predict(tobit_model))-1
-MSE_R <- sum((brownfat.train$Total_vol - pred.train)^2) / tobit_model$df.residual
-paste("The MSE is :", MSE_R)
-```
-
-## MODEL SELECTION - 2-Model Approach
-
-There seems to be a pattern here, a data imbalance (i.e. where most has their `Total_vol = 0) exists, we may have to consider an alternative approach: Build 2 models.
-
-- Model 1: Classification model to predict if a patient has brown fat or not.
-- Model 2: Regression model to predict the volumn of brown fat, if the patient does possess some.
-
-### Model 1 : Classification
-
-We add a new categorical/dummy variable, `BrownFat`, which is 1 if `Total_vol > 0` and 0 otherwise.
-
-```{r}
-brownfat.train$BrownFat <- as.factor(ifelse(brownfat.train$Total_vol > 0, 1, 0))
-brownfat.test$BrownFat <- as.factor(ifelse(brownfat.test$Total_vol > 0, 1, 0))
-```
-
-We will try to fit a binary logistic regression model, using the entire training data set.
-
-```{r}
-model_1 <- logistic_reg(mixture = double(1), penalty = double(1)) %>%
-  set_engine("glmnet") %>%
-  set_mode("classification") %>%
-  fit(BrownFat ~ . -Total_vol, data = brownfat.train)
-
-tidy(model_1)
-```
-
-We'll observe the accuracy of this model.
-
-```{r}
-pred_proba <- predict(model_1, new_data = brownfat.test, type = "prob")
-threshold <- 0.05 # roughly % of training data w/ Brownfat == 1
-pred_class <- as.factor(ifelse(pred_proba$.pred_1 > threshold, 1, 0))
-
-confusionMatrix(pred_class, brownfat.test$BrownFat)
-```
-
-Although accuracy is quite low, just under 60%, specificity is much higher at 83%, and we are more concerned about correctly predicting class 1, i.e. class with some brown fat.
-
-### Model 2 : Regression
-
-Here, we perform step-wise regression on the training data set WITH Brownfat == 1.
-
-```{r}
-# get model-training set
-brownfat.train.wbf <- brownfat.train %>% filter(BrownFat == 1)
-brownfat.train.wbf <- brownfat.train.wbf %>% select(-"BrownFat")
-
-# perform stepwise regression
-fit.simple <- stats::lm(Total_vol ~ 1, data=brownfat.train.wbf)
-fit.full <- stats::lm(Total_vol ~ ., data=brownfat.train.wbf)
-fit.stepwise <- stats::step(fit.simple, scope=list(upper=fit.full, lower=fit.simple),
-                            direction="both", trace=0)
-summary(fit.stepwise)
-extractAIC(fit.stepwise)
-
-```
