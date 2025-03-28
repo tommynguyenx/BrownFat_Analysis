@@ -165,7 +165,8 @@ summary(mod.step)
 
 Check its summary:
 ```{r}
-summary(mod)
+summary(mod.step)
+extractAIC(mod.step)
 ```
 Observe its estimates:
 
@@ -182,6 +183,40 @@ pred.train <- exp(predict(mod,
 actual.train <- train$Total_vol
 MSE <- sum((actual.train-pred.train)^2) / (nrow(train) - length(coef(mod)))
 MSE
+```
+
+## GAMMA ZERO INFLATED
+
+```{r}
+library(glmmTMB)
+
+zig_model <- glmmTMB(Total_vol ~ Age + Sex + Ext_Temp + Temp_3D + Temp_2D + 
+    Temp_1M + Diabetes + Weigth + LBW,
+                     ziformula = ~ Age + Sex + Ext_Temp + Temp_3D + Temp_2D + 
+    Temp_1M + Diabetes + Weigth + LBW,
+                     family = lognormal(link = "log"),
+                     data = train)
+
+```
+
+```{r}
+summary(zig_model)
+```
+
+```{r}
+pred.test <- predict(zig_model, 
+                         newdata=test, 
+                         type="response")
+actual.test <- test$Total_vol
+MSPE <- sum((actual.test-pred.test)^2) / nrow(test)
+MSPE
+
+pred.train <- predict(zig_model,
+                          type="response")
+actual.train <- train$Total_vol
+MSE <- sum((actual.train-pred.train)^2) / (nrow(train) - 20)
+MSE
+
 ```
 
 
