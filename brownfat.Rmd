@@ -101,7 +101,7 @@ brownfat_cleaned_data_v2 <- brownfat_cleaned_data_v2 %>%
          Temp_1M = `1M_Temp`)
 
 # split into train and test set
-set.seed(500)
+set.seed(888)
 samp <- sample(1:nrow(brownfat_cleaned_data_v2),
                size = floor(0.7*nrow(brownfat_cleaned_data_v2)),
                replace=FALSE)
@@ -176,7 +176,7 @@ MSE <- sum((actual.train-pred.train)^2) / (nrow(train) - 14)
 MSE
 
 
-extractAIC(final_zip)
+extractAIC(zilgnorm.dredged)
 ```
 
 Note the MSE and MSPE are relatively similar to the linear regression model, however, do note the much lower AIC values. While it is important to note that AIC values are not typically comparable between different types of models (in this case, lm vs. zero inflated), a large difference of AIC can indicate that the zero inflated model may be more fitted and likely to accurately predict the response variable, i.e. the total volume of brown fat.
