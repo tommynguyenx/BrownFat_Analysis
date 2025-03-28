@@ -82,7 +82,7 @@ brownfat_cleaned_data_v2 <- brownfat_cleaned_data %>%
   filter(!is.na(Cancer_Type))
 ```
 
-## ZERO-INFLATED MODEL
+## CROSS VALIDATION
 
 Split into training and testing set.
 
@@ -117,125 +117,69 @@ require(pscl)
 ```
 
 
-Optional: try to downsample our training set but still be as large as test set.
 
-```{r}
-library(ROSE)
-train$BrownFat <- ifelse(train$Total_vol > 0, 1, 0)
-train_data_oversampled <- 
-  ovun.sample(BrownFat ~ ., data = train, method = "under", N = 800)$data
-```
-
-We will transform Y to better visualize and work with it.
-
-```{r}
-train <- train %>% 
-  mutate(log_vol = round(log(Total_vol+1)*10)) 
-# optional if using under-sampled data
-train_data_oversampled <- train_data_oversampled %>% 
-  mutate(log_vol = round(log(Total_vol+1)*2)) 
-
-# optional: get rid of any obs above some value (between those having brownfat) = 28
-train_rid_obs <- train %>% filter(log_vol <= 55)
-
-# the mult. by 2 is to keep as much unique values as possible, consider the difference:
-unique(sort(round(log(train$Total_vol+1))))
-unique(sort(round(log(train$Total_vol+1)*10)))
-unique(sort(round(log(train_data_oversampled$Total_vol+1)*2)))
-```
-
-The difference in visualization is somewhat visible when looking at Y and the transformed Y, but both are nonetheless very much zero-inflated.
-```{r}
-flexplot(log_vol~1, data=train)
-flexplot(Total_vol~1, data=train)
-flexplot(log_vol~1, data=train_data_oversampled)
-```
-
-Let's now do the zero inflated model, consider a very simple formula as to avoid non-convergence
-
-```{r}
-mod <- zeroinfl(log_vol ~ Age + Sex + Ext_Temp + BMI + Temp_7D + Temp_3D + Temp_2D
-                + Temp_1M + Diabetes + Weigth + Glycemy + LBW + Cancer_Status 
-                | Age + Sex + Ext_Temp + BMI
-                , data=train, dist="negbin") 
-mod.step <- stats::step(mod, direction="both")
-summary(mod.step)
-```
-
-
-Check its summary:
-```{r}
-summary(mod.step)
-extractAIC(mod.step)
-```
-Observe its estimates:
-
-```{r}
-pred.test <- exp(predict(mod, 
-                         newdata=test, 
-                         type="response")/10)-1
-actual.test <- test$Total_vol
-MSPE <- sum((actual.test-pred.test)^2) / nrow(test)
-MSPE
-
-pred.train <- exp(predict(mod,
-                          type="response")/10)-1
-actual.train <- train$Total_vol
-MSE <- sum((actual.train-pred.train)^2) / (nrow(train) - length(coef(mod)))
-MSE
-```
-
-## GAMMA ZERO INFLATED
+## ZERO INFLATED LOGNORMAL MODEL
 
 ```{r}
 library(glmmTMB)
 
-zig_model <- glmmTMB(Total_vol ~ Age + Sex + Ext_Temp + Temp_3D + Temp_2D + 
-    Temp_1M + Diabetes + Weigth + LBW,
+# Note we exclude multi-class categorical variables to avoid non-convergence
+zilgnorm <- glmmTMB(Total_vol ~ Age + Sex + Ext_Temp + Temp_3D + Temp_2D + 
+                       Temp_1M + Diabetes + Weigth + LBW,
                      ziformula = ~ Age + Sex + Ext_Temp + Temp_3D + Temp_2D + 
-    Temp_1M + Diabetes + Weigth + LBW,
+                       Temp_1M + Diabetes + Weigth + LBW,
                      family = lognormal(link = "log"),
-                     data = train)
+                     data = train,
+                     na.action = "na.fail")
+
+#zig_model.step <- MASS::stepAIC(zig_model, direction="both")
 
 ```
 
 ```{r}
-summary(zig_model)
+# this is the model after stepwise reg. based on AIC
+zilgnorm.step <- glmmTMB(Total_vol ~ Age + Diabetes + Temp_3D + Weigth,
+                         ziformula = ~ Age + Sex + Ext_Temp + Temp_3D + 
+                           Temp_2D + Temp_1M + Diabetes + Weigth + LBW,
+                       family = lognormal(link="log"),
+                       data=train,
+                       na.action="na.fail")
+
+#optimize the covariates based on AIC
+#library(MuMIn)
+#model.dredge <- MuMIn::dredge(simpler_zip, trace=2)
+
+# model after dredge, note that the current model is indeed the best model (i.e. no change)
+# but choose best 4th model w/ AIC = 3386.2 (compare to best model w/ AIC = 3385.3)
+# as deltaAIC is not large, & the 4th best model only has 2 covariates, we choose this to simplify complexity
+zilgnorm.dredged <- glmmTMB(Total_vol ~ Age  + Temp_3D,
+                            ziformula = ~ Age + Diabetes + Ext_Temp + LBW + 
+                              Sex + Temp_1M + Temp_2D + Temp_3D + Weigth,
+                            dispformula = ~ 1, 
+                            data=train,
+                            family=lognormal(link="log"),
+                            na.action = "na.fail")
 ```
 
+
+Now let's do predictions & its AIC:
+
 ```{r}
-pred.test <- predict(zig_model, 
-                         newdata=test, 
-                         type="response")
+pred.test <- predict(zilgnorm.dredged, newdata=test, type="response")
 actual.test <- test$Total_vol
 MSPE <- sum((actual.test-pred.test)^2) / nrow(test)
 MSPE
 
-pred.train <- predict(zig_model,
-                          type="response")
+pred.train <- predict(zilgnorm.dredged, type="response")
 actual.train <- train$Total_vol
-MSE <- sum((actual.train-pred.train)^2) / (nrow(train) - 20)
+MSE <- sum((actual.train-pred.train)^2) / (nrow(train) - 14)
 MSE
 
+
+extractAIC(final_zip)
 ```
 
+Note the MSE and MSPE are relatively similar to the linear regression model, however, do note the much lower AIC values. While it is important to note that AIC values are not typically comparable between different types of models (in this case, lm vs. zero inflated), a large difference of AIC can indicate that the zero inflated model may be more fitted and likely to accurately predict the response variable, i.e. the total volume of brown fat.
 
-## MODEL DIAGNOSTICS
 
-```{r}
-ggplot(data=NULL, aes(x=mod$fitted.values, mod$residuals)) + 
-  geom_point()
-
-# Detect outliers using IQR (Interquartile Range)
-Q1 <- quantile(mod$residuals, 0.25)
-Q3 <- quantile(mod$residuals, 0.75)
-IQR_val <- Q3 - Q1
-lower_bound <- Q1 - 1.5 * IQR_val
-upper_bound <- Q3 + 1.5 * IQR_val
-
-# Find outliers
-outliers <- which(mod$residuals < lower_bound | mod$residuals > upper_bound)
-
-cat("Number of outliers detected:", length(outliers))
-```
 
