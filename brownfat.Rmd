@@ -82,4 +82,104 @@ brownfat_cleaned_data_v2 <- brownfat_cleaned_data %>%
   filter(!is.na(Cancer_Type))
 ```
 
-sds
+## ZERO-INFLATED MODEL
+
+Split into training and testing set.
+
+```{r}
+# convert categorical vars into factors, and rename some vars.
+brownfat_cleaned_data_v2 <- brownfat_cleaned_data_v2 %>%
+  mutate(Sex = as.factor(Sex),
+         Diabetes = as.factor(Diabetes),
+         Month = as.factor(Month),
+         Season = as.factor(Season),
+         Cancer_Status = as.factor(Cancer_Status),
+         Cancer_Type = as.factor(Cancer_Type)) %>%
+  rename(Temp_2D = `2D_Temp`,
+         Temp_3D = `3D_Temp`,
+         Temp_7D = `7D_Temp`,
+         Temp_1M = `1M_Temp`)
+
+# split into train and test set
+set.seed(500)
+samp <- sample(1:nrow(brownfat_cleaned_data_v2),
+               size = floor(0.7*nrow(brownfat_cleaned_data_v2)),
+               replace=FALSE)
+train <- brownfat_cleaned_data_v2[samp,]
+test <- brownfat_cleaned_data_v2[-samp,]
+```
+
+Libraries needed:
+```{r}
+require(flexplot)
+require(tidyverse)
+require(pscl)
+```
+
+
+Optional: try to downsample our training set but still be as large as test set.
+
+```{r}
+library(ROSE)
+train$BrownFat <- ifelse(train$Total_vol > 0, 1, 0)
+train_data_undersampled <- 
+  ovun.sample(BrownFat ~ ., data = train, method = "under", N = nrow(test))$data
+```
+
+We will transform Y to better visualize and work with it.
+
+```{r}
+train <- train %>% 
+  mutate(log_vol = round(log(Total_vol+1)*2)) 
+# optional if using under-sampled data
+train_data_undersampled <- train_data_undersampled %>% 
+  mutate(log_vol = round(log(Total_vol+1)*10)) 
+
+# the mult. by 10 is to keep as much unique values as possible, consider the difference:
+unique(sort(round(log(train$Total_vol+1))))
+unique(sort(round(log(train$Total_vol+1)*2)))
+```
+
+The difference in visualization is somewhat visible when looking at Y and the transformed Y, but both are nonetheless very much zero-inflated.
+```{r}
+flexplot(log_vol~1, data=train)
+flexplot(Total_vol~1, data=train)
+```
+
+Let's now do the zero inflated model, consider a very simple formula as to avoid non-convergence
+
+```{r}
+mod <- zeroinfl(log_vol ~ Age + Sex
+                + Ext_Temp + BMI
+                , data=train, dist="negbin")
+```
+
+
+Check its summary:
+```{r}
+summary(mod)
+```
+Observe its estimates:
+
+```{r}
+pred.test <- exp(predict(mod, 
+                         newdata=test, 
+                         type="response") / 10) - 1
+actual.test <- test$Total_vol
+MSPE <- sum((actual.test-pred.test)^2) / nrow(test)
+MSPE
+
+pred.train <- exp(predict(mod,
+                          type="response") / 10) - 1
+actual.train <- train$Total_vol
+MSE <- sum((actual.train-pred.train)^2) / (nrow(train) - length(coef(mod)))
+MSE
+```
+
+## MODEL DIAGNOSTICS
+
+```{r}
+ggplot(data=NULL, aes(x=mod$fitted.values, mod$residuals)) + 
+  geom_point()
+```
+
