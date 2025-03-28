@@ -28,7 +28,7 @@ x[x > 0]
 Notice that $4425$ out of $n=4842$ observations had no data on their `TSH`, as this ratio is too large in order for us to confidently assign the most-probable values, we will choose to exclude the variable `TSH` altogether.
 
 ```{r}
-brownfat_cleaned_data <- brownfat %>% select(-c("TSH"))
+brownfat_cleaned_data <- brownfat %>% dplyr::select(-c("TSH"))
 ```
 
 There are observations where both the `Cancer_Status` and `Cancer_Type` is set to NA, as we don't have domain knowledge to assign appropriate values nor is it the main focus of this research, we will simply exclude these observations.
@@ -122,36 +122,44 @@ Optional: try to downsample our training set but still be as large as test set.
 ```{r}
 library(ROSE)
 train$BrownFat <- ifelse(train$Total_vol > 0, 1, 0)
-train_data_undersampled <- 
-  ovun.sample(BrownFat ~ ., data = train, method = "under", N = nrow(test))$data
+train_data_oversampled <- 
+  ovun.sample(BrownFat ~ ., data = train, method = "under", N = 800)$data
 ```
 
 We will transform Y to better visualize and work with it.
 
 ```{r}
 train <- train %>% 
-  mutate(log_vol = round(log(Total_vol+1)*2)) 
-# optional if using under-sampled data
-train_data_undersampled <- train_data_undersampled %>% 
   mutate(log_vol = round(log(Total_vol+1)*10)) 
+# optional if using under-sampled data
+train_data_oversampled <- train_data_oversampled %>% 
+  mutate(log_vol = round(log(Total_vol+1)*2)) 
 
-# the mult. by 10 is to keep as much unique values as possible, consider the difference:
+# optional: get rid of any obs above some value (between those having brownfat) = 28
+train_rid_obs <- train %>% filter(log_vol <= 55)
+
+# the mult. by 2 is to keep as much unique values as possible, consider the difference:
 unique(sort(round(log(train$Total_vol+1))))
-unique(sort(round(log(train$Total_vol+1)*2)))
+unique(sort(round(log(train$Total_vol+1)*10)))
+unique(sort(round(log(train_data_oversampled$Total_vol+1)*2)))
 ```
 
 The difference in visualization is somewhat visible when looking at Y and the transformed Y, but both are nonetheless very much zero-inflated.
 ```{r}
 flexplot(log_vol~1, data=train)
 flexplot(Total_vol~1, data=train)
+flexplot(log_vol~1, data=train_data_oversampled)
 ```
 
 Let's now do the zero inflated model, consider a very simple formula as to avoid non-convergence
 
 ```{r}
-mod <- zeroinfl(log_vol ~ Age + Sex
-                + Ext_Temp + BMI
-                , data=train, dist="negbin")
+mod <- zeroinfl(log_vol ~ Age + Sex + Ext_Temp + BMI + Temp_7D + Temp_3D + Temp_2D
+                + Temp_1M + Diabetes + Weigth + Glycemy + LBW + Cancer_Status 
+                | Age + Sex + Ext_Temp + BMI
+                , data=train, dist="negbin") 
+mod.step <- stats::step(mod, direction="both")
+summary(mod.step)
 ```
 
 
@@ -164,22 +172,35 @@ Observe its estimates:
 ```{r}
 pred.test <- exp(predict(mod, 
                          newdata=test, 
-                         type="response") / 10) - 1
+                         type="response")/10)-1
 actual.test <- test$Total_vol
 MSPE <- sum((actual.test-pred.test)^2) / nrow(test)
 MSPE
 
 pred.train <- exp(predict(mod,
-                          type="response") / 10) - 1
+                          type="response")/10)-1
 actual.train <- train$Total_vol
 MSE <- sum((actual.train-pred.train)^2) / (nrow(train) - length(coef(mod)))
 MSE
 ```
+
 
 ## MODEL DIAGNOSTICS
 
 ```{r}
 ggplot(data=NULL, aes(x=mod$fitted.values, mod$residuals)) + 
   geom_point()
+
+# Detect outliers using IQR (Interquartile Range)
+Q1 <- quantile(mod$residuals, 0.25)
+Q3 <- quantile(mod$residuals, 0.75)
+IQR_val <- Q3 - Q1
+lower_bound <- Q1 - 1.5 * IQR_val
+upper_bound <- Q3 + 1.5 * IQR_val
+
+# Find outliers
+outliers <- which(mod$residuals < lower_bound | mod$residuals > upper_bound)
+
+cat("Number of outliers detected:", length(outliers))
 ```
 
